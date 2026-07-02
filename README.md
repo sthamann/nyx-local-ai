@@ -220,6 +220,24 @@ Nyx can live in the left Activity Bar (default) or the **secondary side bar** on
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
 - **Chat** is a single plain streaming response with no tools.
 
+### Model eval harness
+Which of your machines/models should be the daily driver? `.harness/eval.mjs`
+benchmarks any OpenAI-compatible endpoint on the skills Nyx actually needs:
+
+```bash
+node .harness/eval.mjs --url http://localhost:11434/v1 --model qwen2.5-coder:32b
+node .harness/eval.mjs --url http://192.168.1.77:8888/v1 --model deepseek-v4-flash --rounds 3
+```
+
+It scores **tool-call success** (5 tasks incl. an ask-user trap), **edit
+precision** (edit_file calls are actually applied via Nyx's fuzzy matcher and
+verified against expected output), and **bug-judgment accuracy** incl. the
+**false-positive rate** on correct-but-suspicious-looking snippets (closure
+timing, delta indentation — the classic LLM traps). Uses the real Nyx system
+prompt, tool schemas, and tool-call parser, so scores reflect in-product
+behavior. Example (DeepSeek V4 Flash on a DGX Spark cluster): 80% tool calls,
+67% edits, 83% judgment, 33% FP rate, ~1.3 s/request.
+
 ### Verify-before-report
 Local models love to "find" bugs by pattern-matching code they've only read.
 Nyx's system prompt enforces an evidence discipline: before reporting a bug or

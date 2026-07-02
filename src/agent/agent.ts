@@ -7,7 +7,7 @@ import type { McpWireTool } from '../mcp/client';
 import { messageText } from '../types';
 import type { ChatMessage, ChatMode, ContentPart, DiffSummary, ModelInfo, QuestionType, ToolCallRef, ToolSchema } from '../types';
 
-const BASE_SYSTEM_PROMPT = [
+export const BASE_SYSTEM_PROMPT = [
   "You are Nyx, a concise and capable coding agent running fully locally inside the user's editor.",
   'You help with the code in the currently open workspace.',
   '',
