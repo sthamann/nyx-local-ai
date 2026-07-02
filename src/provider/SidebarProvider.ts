@@ -549,7 +549,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const rules = await loadRules(this.workspaceRoot());
     const memoryEnabled = cfg.get<boolean>('memoryEnabled') ?? true;
     const memoryDigest = memoryEnabled ? this.memory.digest(cfg.get<number>('memoryInject') ?? 5, this.currentSessionId) : '';
-    const systemAddon = [buildRulesSection(rules), buildSkillsSection(this.skillsCache), memoryDigest].filter(Boolean).join('\n\n');
+    const userAppend = (cfg.get<string>('systemPromptAppend') ?? '').trim();
+    const systemAddon = [buildRulesSection(rules), buildSkillsSection(this.skillsCache), memoryDigest, userAppend]
+      .filter(Boolean)
+      .join('\n\n');
     const overrides = cfg.get<Record<string, unknown>>('toolPermissions') ?? {};
     const budget = this.budgetFor(model);
 

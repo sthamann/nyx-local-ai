@@ -347,6 +347,11 @@
             "type": "object"
           }
         },
+        "nyx.systemPromptAppend": {
+          "type": "string",
+          "default": "",
+          "description": "Extra instructions appended to the agent's system prompt (kept stable per session for prompt-cache efficiency). For project-specific rules prefer .cursor/rules/*.mdc."
+        },
         "nyx.maxOutputTokens": {
           "type": "number",
           "default": 8192,

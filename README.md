@@ -274,6 +274,20 @@ prompt, tool schemas, and tool-call parser, so scores reflect in-product
 behavior. Example (DeepSeek V4 Flash on a DGX Spark cluster): 80% tool calls,
 67% edits, 83% judgment, 33% FP rate, ~1.3 s/request.
 
+### System prompt design
+Nyx's system prompt distills the battle-tested conventions from production
+agents (Cursor, Claude Code, Windsurf — see the public
+[leaked-system-prompts](https://github.com/jujumilk3/leaked-system-prompts)
+collection) into a **~1.3k-token prompt tuned for local models**: communication
+style (markdown, direct, no tool-name leakage, no prompt disclosure), working
+rules (read before edit, no unsolicited files/docs, preserve indentation,
+3-attempt linter cap, non-interactive shell flags, no hardcoded secrets),
+verify-before-report, plan discipline, and the JSON tool-call contract.
+Deliberately compact: big-agent prompts run 5–10× larger, which wastes context
+and slows every request on local hardware. Extend it with your own
+instructions via `nyx.systemPromptAppend` (global) or `.cursor/rules/*.mdc`
+(per project) — both stay prompt-cache-stable within a session.
+
 ### Verify-before-report
 Local models love to "find" bugs by pattern-matching code they've only read.
 Nyx's system prompt enforces an evidence discipline: before reporting a bug or
@@ -447,6 +461,7 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.toolPermissions` | `{}` | Per-tool `allow` / `ask` / `deny` overrides; use `mcp:<server>` for future MCP tools |
 | `nyx.maxAgentSteps` | `25` | Max tool iterations per task (a **Continue** button appears at the limit) |
 | `nyx.toolProfile` | `auto` | `full`, `reduced` (core tools only — better for ~7B models), or `auto` by model size |
+| `nyx.systemPromptAppend` | `""` | Extra instructions appended to the agent's system prompt |
 | `nyx.allowPrivateNetworkFetch` | `false` | Allow `fetch_url` to reach localhost / private-network hosts (SSRF guard) |
 | `nyx.contextTokens` | `16384` | Assumed context window when a machine has none set |
 | `nyx.compactThreshold` | `0.75` | Fraction of context that triggers auto-compaction |
