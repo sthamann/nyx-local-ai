@@ -60,7 +60,7 @@ export class NyxCompletionProvider implements vscode.InlineCompletionItemProvide
   async provideInlineCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-    context: vscode.InlineCompletionContext,
+    _context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionItem[] | undefined> {
     if (!this.isEnabled() || document.uri.scheme === 'output') {
