@@ -39,6 +39,12 @@ const BASE_SYSTEM_PROMPT = [
   '- Project memory of earlier sessions may be provided above. Call recall_memory(query) to look up past work in detail, and save_memory(title, summary) to record durable outcomes worth remembering next time.',
   '- After a tool result, either call another tool the same way, or give your final answer as plain text.',
   '- Your final answer must be plain text — never wrap a normal answer as tool JSON.',
+  '',
+  'Verify before you report (IMPORTANT):',
+  '- Never claim a bug, crash, or runtime behavior from reading code alone. Code that *looks* wrong often is not (closures, hoisting, async timing).',
+  '- Before reporting a bug or behavioral finding, REPRODUCE it: write a minimal run_script (or run_command) test that demonstrates the failure, and quote its actual output in your report.',
+  '- If a claim cannot be executed (needs the editor, hardware, network), label it explicitly as "unverified hypothesis" — never present it as a confirmed finding.',
+  '- In reports, separate observations (file contents, command output) from inferences. Rank findings you verified above hypotheses.',
 ].join('\n');
 
 export interface AgentCallbacks {
@@ -447,10 +453,15 @@ export class AgentSession {
         const mcpTool = mcpTools.find((t) => t.wireName === name);
         const permissionName = mcpTool ? mcpTool.permissionKey : name;
         const outcome = await this.runTool(name, args, resolvePermission(permissionName), options, cb);
-        // Tool outputs can echo model junk back (e.g. recall_memory returning a
-        // summary that contains leaked special tokens) — scrub before it
-        // re-enters the conversation.
-        outcome.content = stripSpecialTokens(outcome.content);
+        // Scrub special tokens ONLY from web-sourced results (untrusted, could
+        // teach the model broken markup). File/command/MCP outputs must stay
+        // byte-faithful — sanitizing read_file corrupts legitimate source code
+        // that merely *mentions* such tokens (e.g. our own DSML tests), which
+        // sends the model analyzing wrong file contents. Memory is sanitized
+        // at the store level.
+        if (name === 'fetch_url' || name === 'web_search') {
+          outcome.content = stripSpecialTokens(outcome.content);
+        }
         cb.onToolResult(call.id, outcome.ok, outcome.content, outcome);
         this.messages.push({ role: 'tool', tool_call_id: call.id, name, content: outcome.content });
         if (signal.aborted) {

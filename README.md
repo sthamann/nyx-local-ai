@@ -23,7 +23,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.24.1**. Local-first and fully offline-capable (the only optional
+> Status: **v0.24.2**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -155,26 +155,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.24.1.vsix
+npm run package    # produces nyx-local-ai-0.24.2.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.24.1.vsix --force
+cursor --install-extension nyx-local-ai-0.24.2.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.24.1.vsix --force
+code --install-extension nyx-local-ai-0.24.2.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.24.1.vsix --force
+  --install-extension nyx-local-ai-0.24.2.vsix --force
 ```
 
 </details>
@@ -219,6 +219,15 @@ Nyx can live in the left Activity Bar (default) or the **secondary side bar** on
 ### Agent vs Chat mode
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
 - **Chat** is a single plain streaming response with no tools.
+
+### Verify-before-report
+Local models love to "find" bugs by pattern-matching code they've only read.
+Nyx's system prompt enforces an evidence discipline: before reporting a bug or
+any runtime-behavior claim, the agent must **reproduce it** with a minimal
+`run_script`/`run_command` test and quote the actual output; claims that can't
+be executed must be labeled *unverified hypothesis*, and observations are kept
+separate from inferences. In our own dogfooding this discipline would have
+eliminated 4 of 7 false positives in a model-written bug report (see `BUG.md`).
 
 ### Tools
 Nyx exposes a broad, Cursor-like tool set. Default permissions:
@@ -405,7 +414,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.24.1.vsix --force
+cursor --install-extension nyx-local-ai-0.24.2.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 

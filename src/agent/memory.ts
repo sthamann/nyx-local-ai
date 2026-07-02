@@ -44,7 +44,9 @@ export class MemoryStore {
   constructor(private readonly state: Memento) {}
 
   all(): MemoryEntry[] {
-    const entries = this.state.get<MemoryEntry[]>(KEY, []);
+    // Copy the entries: Memento returns its internal cached objects, and
+    // mutating those in place would leak through every other caller.
+    const entries = this.state.get<MemoryEntry[]>(KEY, []).map((e) => ({ ...e }));
     // One-time scrub: memories written by older versions can contain leaked
     // model special tokens (DSML fragments). Left in place they poison every
     // future prompt via the digest, and the model starts imitating the junk.

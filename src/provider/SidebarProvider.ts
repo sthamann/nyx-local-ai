@@ -479,6 +479,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const cfg = vscode.workspace.getConfiguration('nyx');
     const supportsVision = model.capabilities?.includes('vision') === true;
     const media = this.mediaOptions();
+    const semanticOpts = this.semanticOptions();
 
     const attachmentCtx = await buildAttachmentContext(this.attachments, media, supportsVision);
     this.attachments = [];
@@ -514,7 +515,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       },
       recordCheckpointFile: (relPath, content) => this.checkpoints.recordFile(relPath, content),
       allowPrivateNetwork: cfg.get<boolean>('allowPrivateNetworkFetch') ?? false,
-      semantic: this.semanticOptions() ? { index: this.semanticIndex, options: this.semanticOptions() as SemanticOptions } : undefined,
+      semantic: semanticOpts ? { index: this.semanticIndex, options: semanticOpts } : undefined,
       memory: {
         recall: (query, limit) => this.memory.formatRecall(query, limit, this.currentSessionId),
         save: (title, summary, files) => {
