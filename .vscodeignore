@@ -12,6 +12,9 @@ tsconfig.json
 .git/**
 *.vsix
 *.traineddata
+# Social/marketing assets — not needed inside the extension package.
+docs/nyx-x-hero.png
+BUG.md
 install.sh
 install.ps1
 

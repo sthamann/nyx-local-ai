@@ -91,7 +91,16 @@
 
       async function sceneChat() {
         send({ type: 'models', models: MODELS, selectedKey: 'dgx:deepseek-v4-flash-dspark' });
-        send({ type: 'sessions', sessions: [{ id: 's1', title: 'Harden tool permission fallback', updatedAt: Date.now(), addedLines: 14, removedLines: 3, changedFiles: 1 }], currentId: 's1' });
+        send({
+          type: 'sessions',
+          sessions: [
+            { id: 's1', title: 'Harden tool permission fallback', updatedAt: Date.now(), addedLines: 14, removedLines: 3, changedFiles: 1, modelLabel: 'deepseek-v4-flash', mode: 'agent' },
+            { id: 's2', title: 'Add rate limiting to the API', updatedAt: Date.now() - 3600e3, addedLines: 22, removedLines: 4, changedFiles: 2, modelLabel: 'GLM-5.2 (2-bit)', mode: 'agent' },
+            { id: 's3', title: 'Fix flaky session tests', updatedAt: Date.now() - 7200e3, addedLines: 5, removedLines: 5, changedFiles: 1, modelLabel: 'qwen2.5-coder:32b', mode: 'agent' },
+            { id: 's4', title: 'Explain the checkpoint design', updatedAt: Date.now() - 86400e3, addedLines: 0, removedLines: 0, changedFiles: 0, modelLabel: 'deepseek-v4-flash', mode: 'chat' },
+          ],
+          currentId: 's1',
+        });
         send({ type: 'userMessage', text: 'Why does a denied tool still run when the name has an mcp: prefix? Find and fix it.', checkpointId: 'cp1' });
         send({ type: 'busy', busy: true });
         send({ type: 'reasoning', text: 'The user reports a permission bypass. Likely the wildcard fallback is consulted before the per-server rule. I should inspect resolvePolicy.' });

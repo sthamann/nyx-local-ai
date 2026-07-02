@@ -1293,8 +1293,10 @@ textarea {
   white-space: nowrap;
   padding: 1px 7px;
   border-radius: 999px;
-  color: var(--vscode-foreground);
-  background: var(--vscode-badge-background, rgba(255, 255, 255, 0.1));
+  font-size: 10px;
+  color: var(--nyx-muted);
+  background: transparent;
+  border: 1px solid var(--nyx-border, rgba(255, 255, 255, 0.14));
 }
 
 .nyx-hist-model::before {
@@ -1876,3 +1878,79 @@ select.nyx-inp {
 .nyx-plan-item.active .nyx-plan-icon { color: var(--nyx-accent); }
 .nyx-plan-item.active .nyx-plan-text { font-weight: 600; }
 .nyx-plan-item.pending .nyx-plan-icon { color: var(--nyx-muted); }
+
+/* ---- v0.25.2: always-visible session tabs ---- */
+.nyx-session-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--nyx-border);
+  scrollbar-width: none;
+}
+
+.nyx-session-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.nyx-session-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 140px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--nyx-border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nyx-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+}
+
+.nyx-session-tab:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.nyx-session-tab.active {
+  color: var(--vscode-foreground);
+  border-color: var(--nyx-accent);
+  background: color-mix(in srgb, var(--nyx-accent) 12%, transparent);
+}
+
+.nyx-session-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nyx-session-tab-x {
+  display: none;
+  font-size: 9px;
+  opacity: 0.7;
+  padding: 0 1px;
+}
+
+.nyx-session-tab:hover .nyx-session-tab-x {
+  display: inline;
+}
+
+.nyx-session-tab-x:hover {
+  opacity: 1;
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.nyx-session-tab-new,
+.nyx-session-tab-more {
+  padding: 2px 9px;
+  font-weight: 600;
+}
+
+#nyx-tabs-toggle.active {
+  color: var(--nyx-accent);
+}

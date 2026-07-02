@@ -23,7 +23,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.25.1**. Local-first and fully offline-capable (the only optional
+> Status: **v0.25.2**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -105,7 +105,7 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Clarifying questions.** The model can ask you single-choice, multiple-choice, or free-text questions.
 - **Project memory.** Key outcomes of past sessions are remembered per project and offered to new sessions (automatically and via tools).
 - **Auto-named chats.** After the first exchange, each chat gets a short model-generated title.
-- **Chat history.** Every conversation is saved locally — switch between chats, search by title/model/machine, and see edit stats (+/− lines, files changed).
+- **Chat history & session tabs.** Every conversation is saved locally — an always-visible tab strip switches between recent chats instantly; the full history is searchable by title/model/machine with edit stats (+/− lines, files changed).
 - **Reasoning display.** Models that stream thinking (`reasoning_content`, `<think>`, …) show a collapsible *Thought for Ns* block above the answer.
 - **Markdown answers.** GitHub-flavored markdown with **syntax highlighting** and a copy button on every code block.
 - **Local-model resilience.** Whitespace-tolerant `edit_file` matching, JSON repair for sloppy tool arguments, tool calls detected even when embedded in prose, automatic retry on transient network errors, and failover to another machine serving the same model.
@@ -161,26 +161,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.25.1.vsix
+npm run package    # produces nyx-local-ai-0.25.2.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.25.1.vsix --force
+cursor --install-extension nyx-local-ai-0.25.2.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.25.1.vsix --force
+code --install-extension nyx-local-ai-0.25.2.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.25.1.vsix --force
+  --install-extension nyx-local-ai-0.25.2.vsix --force
 ```
 
 </details>
@@ -439,8 +439,10 @@ Per project, Nyx distills each session's **key outcomes** (goal, result, changed
 
 Browse, delete, or clear memories from the 🧠 view in the sidebar. Toggle with `nyx.memoryEnabled`; control the injected count with `nyx.memoryInject`.
 
-### Chat history
-Open **History** (☰) to browse past conversations. Chats are grouped by date (*Today*, *Yesterday*, …), searchable by title/model/machine/mode, and show edit stats (+/− lines, files changed). Switching chats restores the full transcript and tool cards. Up to 50 sessions are kept per workspace.
+### Chat history & session tabs
+Recent chats live in an **always-visible tab strip** under the title bar — click to switch instantly (browser-tab style, with a `+` for a new chat, × on hover to delete, and an overflow counter that opens the full history). Toggle the strip with the ⧉ button; the preference is remembered. Switching is blocked while a job runs so you never abort one by accident.
+
+For the full archive, open **History** (☰): chats grouped by date (*Today*, *Yesterday*, …), searchable by title/model/machine/mode, with edit stats (+/− lines, files changed) and the model shown as a subtle chip. Switching chats restores the full transcript, tool cards, and task plan. Up to 50 sessions are kept per workspace.
 
 ### Auto-named chats
 After the first exchange, Nyx asks the model for a short 3–6 word title and names the chat automatically (shown in the top bar and in History). Falls back to the first message if generation is unavailable. Toggle with `nyx.autoTitle`.
@@ -500,7 +502,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.25.1.vsix --force
+cursor --install-extension nyx-local-ai-0.25.2.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
@@ -621,6 +623,9 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 
 ### 32. Browser automation
 - Ask *"Open https://example.com in the browser and tell me what the page links to."* → approve `browser_navigate`; the agent reads the page snapshot and can click/type via element refs.
+
+### 33. Session tabs
+- Have 2+ chats → a tab strip appears under the title bar. Click a tab to switch instantly, `+` for a new chat, × (on hover) to delete, ⧉ in the title bar to hide/show the strip. While a job runs, switching is blocked with a hint instead of aborting the run.
 
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.

@@ -16,6 +16,7 @@ interface PersistedState {
   selectedKey?: string;
   mode?: ChatMode;
   draft?: string;
+  showSessionTabs?: boolean;
 }
 
 const saved = (vscode.getState() as PersistedState | undefined) ?? {};
@@ -34,9 +35,15 @@ export const S = {
   userStopped: false,
   historyFilter: '',
   savedDraft: saved.draft ?? '',
+  showSessionTabs: saved.showSessionTabs ?? true,
 };
 
 export function persist(draft?: string): void {
   const liveDraft = draft ?? (document.getElementById('nyx-input') as HTMLTextAreaElement | null)?.value ?? '';
-  vscode.setState({ selectedKey: S.selectedKey, mode: S.mode, draft: liveDraft } satisfies PersistedState);
+  vscode.setState({
+    selectedKey: S.selectedKey,
+    mode: S.mode,
+    draft: liveDraft,
+    showSessionTabs: S.showSessionTabs,
+  } satisfies PersistedState);
 }

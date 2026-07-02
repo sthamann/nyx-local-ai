@@ -1,6 +1,7 @@
 import type { HostToWebview, ModelInfo } from '../src/types';
 import {
   chatTitleEl,
+  tabsToggleBtn,
   histBtn,
   histNewBtn,
   histSearch,
@@ -56,7 +57,7 @@ import {
   setComposerText,
   setMode,
 } from './composer';
-import { renderHistory, renderMemory, updateChatTitle } from './history';
+import { renderHistory, renderMemory, renderSessionTabs, updateChatTitle } from './history';
 import { isEditing, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
 
 /** Capability badges shown next to the model name in the picker (#19). */
@@ -157,6 +158,11 @@ newBtn.addEventListener('click', () => {
   showView('chat');
 });
 refreshBtn.addEventListener('click', () => post({ type: 'refreshModels' }));
+tabsToggleBtn.addEventListener('click', () => {
+  S.showSessionTabs = !S.showSessionTabs;
+  persist();
+  renderSessionTabs();
+});
 manageBtn.addEventListener('click', () => {
   post({ type: 'getMachines' });
   stopEditing();
@@ -256,6 +262,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       S.sessions = message.sessions;
       S.currentSessionId = message.currentId;
       updateChatTitle();
+      renderSessionTabs();
       if (!historyView.hidden) {
         renderHistory();
       }

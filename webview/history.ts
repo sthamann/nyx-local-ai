@@ -1,6 +1,16 @@
 import type { MemoryEntry, SessionMeta } from '../src/types';
-import { chatTitleEl, escapeHtml, historyList, memList, relativeTime, showView } from './dom';
+import { chatTitleEl, escapeHtml, historyList, memList, relativeTime, sessionTabsEl, showView, tabsToggleBtn } from './dom';
+import { setStatus } from './transcript';
 import { post, S } from './state';
+
+/** Switching sessions aborts a running job — block it and explain instead. */
+function guardBusySwitch(): boolean {
+  if (S.busy) {
+    setStatus('A job is running — press Stop before switching chats.');
+    return true;
+  }
+  return false;
+}
 
 function groupOf(ts: number): string {
   const now = new Date();
@@ -149,6 +159,9 @@ function renderHistoryEntry(s: SessionMeta): HTMLElement {
   row.title = s.modelLabel ? `${s.title}\n${s.modelLabel}${s.machineName ? ` · ${s.machineName}` : ''}` : s.title || '';
 
   row.addEventListener('click', () => {
+    if (s.id !== S.currentSessionId && guardBusySwitch()) {
+      return;
+    }
     post({ type: 'loadSession', id: s.id });
     showView('chat');
   });
@@ -164,6 +177,96 @@ export function updateChatTitle(): void {
   const title = current?.title ?? '';
   chatTitleEl.textContent = title;
   chatTitleEl.title = title;
+}
+
+// ---- Always-visible session tabs ----
+
+const MAX_TABS = 12;
+
+/** Renders the session tab strip (recent chats as switchable pills). */
+export function renderSessionTabs(): void {
+  tabsToggleBtn.setAttribute('aria-pressed', String(S.showSessionTabs));
+  tabsToggleBtn.classList.toggle('active', S.showSessionTabs);
+  const sessions = S.sessions.slice(0, MAX_TABS);
+  // A tab strip with zero or one chat adds nothing but noise.
+  if (!S.showSessionTabs || sessions.length < 2) {
+    sessionTabsEl.hidden = true;
+    return;
+  }
+  sessionTabsEl.hidden = false;
+  sessionTabsEl.innerHTML = '';
+
+  const isUnsavedNew = !S.currentSessionId || !S.sessions.some((s) => s.id === S.currentSessionId);
+  const newTab = document.createElement('button');
+  newTab.type = 'button';
+  newTab.className = 'nyx-session-tab nyx-session-tab-new' + (isUnsavedNew ? ' active' : '');
+  newTab.setAttribute('role', 'tab');
+  newTab.setAttribute('aria-selected', String(isUnsavedNew));
+  newTab.textContent = '+';
+  newTab.title = 'New chat';
+  newTab.addEventListener('click', () => {
+    if (guardBusySwitch()) {
+      return;
+    }
+    post({ type: 'newChat' });
+    showView('chat');
+  });
+  sessionTabsEl.appendChild(newTab);
+
+  for (const s of sessions) {
+    const active = s.id === S.currentSessionId;
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'nyx-session-tab' + (active ? ' active' : '');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(active));
+    tab.title = `${s.title}${s.modelLabel ? `\n${s.modelLabel}` : ''} · ${relativeTime(s.updatedAt)}`;
+
+    const label = document.createElement('span');
+    label.className = 'nyx-session-tab-label';
+    label.textContent = s.title || 'Untitled';
+    tab.appendChild(label);
+
+    const close = document.createElement('span');
+    close.className = 'nyx-session-tab-x';
+    close.setAttribute('role', 'button');
+    close.setAttribute('aria-label', `Delete "${s.title}"`);
+    close.textContent = '\u2715';
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      post({ type: 'deleteSession', id: s.id });
+    });
+    tab.appendChild(close);
+
+    tab.addEventListener('click', () => {
+      if (active) {
+        showView('chat');
+        return;
+      }
+      if (guardBusySwitch()) {
+        return;
+      }
+      post({ type: 'loadSession', id: s.id });
+      showView('chat');
+    });
+    sessionTabsEl.appendChild(tab);
+  }
+
+  if (S.sessions.length > MAX_TABS) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'nyx-session-tab nyx-session-tab-more';
+    more.textContent = `+${S.sessions.length - MAX_TABS}`;
+    more.title = 'Show all chats';
+    more.addEventListener('click', () => {
+      renderHistory();
+      showView('history');
+    });
+    sessionTabsEl.appendChild(more);
+  }
+
+  // Keep the active tab in view when the strip scrolls.
+  sessionTabsEl.querySelector('.nyx-session-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 // ---- Memory view ----

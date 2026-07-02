@@ -1,12 +1,14 @@
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
   <div class="nyx-topbar">
-    <button id="nyx-hist" class="nyx-icon-btn" type="button" title="Chats \u2014 switch between conversations" aria-label="Chats">&#9776;</button>
+    <button id="nyx-hist" class="nyx-icon-btn" type="button" title="Chats \u2014 full history with search" aria-label="Chats">&#9776;</button>
     <button id="nyx-new" class="nyx-icon-btn nyx-new" type="button" title="Start a new chat">+ New</button>
     <span class="nyx-chat-title" id="nyx-chat-title" title=""></span>
+    <button id="nyx-tabs-toggle" class="nyx-icon-btn" type="button" title="Toggle the always-visible session tabs" aria-label="Toggle session tabs" aria-pressed="true">&#10064;</button>
     <button id="nyx-mem" class="nyx-icon-btn" type="button" title="Project memory" aria-label="Project memory">&#129504;</button>
     <button id="nyx-refresh" class="nyx-icon-btn" type="button" title="Refresh models" aria-label="Refresh models">&#8635;</button>
   </div>
+  <div id="nyx-session-tabs" class="nyx-session-tabs" role="tablist" aria-label="Open chats" hidden></div>
   <div id="nyx-chat" class="nyx-view">
     <div class="nyx-subbar">
       <select class="nyx-select" id="nyx-model" aria-label="Active model" title="Active model — the local agent that answers"></select>
@@ -128,6 +130,8 @@ export const mmBackBtn = el<HTMLButtonElement>('nyx-mm-back');
 export const mmAddBtn = el<HTMLButtonElement>('nyx-mm-add');
 export const mentionsEl = el<HTMLDivElement>('nyx-mentions');
 export const planEl = el<HTMLDivElement>('nyx-plan');
+export const sessionTabsEl = el<HTMLDivElement>('nyx-session-tabs');
+export const tabsToggleBtn = el<HTMLButtonElement>('nyx-tabs-toggle');
 export const dropOverlay = el<HTMLDivElement>('nyx-drop');
 export const dropSub = el<HTMLElement>('nyx-drop-sub');
 
