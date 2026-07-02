@@ -104,6 +104,7 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Reasoning display.** Models that stream thinking (`reasoning_content`, `<think>`, …) show a collapsible *Thought for Ns* block above the answer.
 - **Markdown answers.** GitHub-flavored markdown with **syntax highlighting** and a copy button on every code block.
 - **Local-model resilience.** Whitespace-tolerant `edit_file` matching, JSON repair for sloppy tool arguments, tool calls detected even when embedded in prose, automatic retry on transient network errors, and failover to another machine serving the same model.
+- **Parallel tool calls.** Independent read-only calls emitted in one turn (multiple reads/searches) execute concurrently — on slow local models every saved roundtrip is seconds off the task.
 - **Fast search.** `search_files` uses the ripgrep binary shipped with the editor (with a JS fallback).
 - **Done badge.** If Nyx finishes while the panel is hidden, its icon shows a badge.
 - **Right-side panel.** Move Nyx to the secondary side bar (next to Cursor's agent panel), recover it via the status bar or Command Palette if it disappears.
