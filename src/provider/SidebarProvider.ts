@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { discoverModels, probeMachine } from '../models/discovery';
 import { MachineStore } from '../models/machines';
 import { AgentSession, generateSessionTitle } from '../agent/agent';
+import { parameterBillions } from '../agent/toolSchemas';
 import { streamChat, stripSpecialTokens } from '../models/client';
 import { CheckpointStore } from '../agent/checkpoints';
 import { MemoryStore } from '../agent/memory';
@@ -681,6 +682,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           ctx,
           systemAddon,
           toolProfile: (cfg.get<string>('toolProfile') as ToolProfile) ?? 'auto',
+          compactModel: this.hasExplicitUtilityModel() ? this.utilityModel() : undefined,
           mcpTools: this.mcp.getTools(),
           callMcpTool: (server, tool, mcpArgs) => this.mcp.call(server, tool, mcpArgs),
           resolvePermission: (name) => (this.sessionAllow.has(name) ? 'allow' : resolvePolicy(name, overrides, this.autonomy())),
@@ -929,9 +931,28 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** The model used for utility work (titles, summaries, commit messages). */
+  /**
+   * The model used for utility work (titles, commit messages — and context
+   * compaction when configured explicitly). `nyx.utilityModel` may name a
+   * model (key or id); empty means auto: the smallest reachable ≤8B model.
+   * Undefined = no suitable candidate, callers fall back to the main model.
+   */
   private utilityModel(): ModelInfo | undefined {
-    return undefined; // smart routing lands with the utility-model feature
+    const setting = (vscode.workspace.getConfiguration('nyx').get<string>('utilityModel') ?? '').trim();
+    if (setting) {
+      return this.models.find((m) => m.key === setting) ?? this.models.find((m) => m.id === setting);
+    }
+    const candidates = this.models
+      .filter((m) => !/embed|moondream|whisper/i.test(m.id))
+      .map((m) => ({ m, size: parameterBillions(m.id) }))
+      .filter((x): x is { m: ModelInfo; size: number } => x.size !== undefined && x.size <= 8)
+      .sort((a, b) => a.size - b.size);
+    return candidates[0]?.m;
+  }
+
+  /** True when the user explicitly pinned a utility model (routes compaction too). */
+  private hasExplicitUtilityModel(): boolean {
+    return Boolean((vscode.workspace.getConfiguration('nyx').get<string>('utilityModel') ?? '').trim());
   }
 
   /** Builds the net session diff: checkpoint originals vs. current disk state. */
@@ -1007,7 +1028,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const assistantText = firstAssistant && firstAssistant.kind === 'assistant' ? firstAssistant.text : '';
     const sessionId = this.currentSessionId;
     try {
-      const title = await generateSessionTitle(model, firstUser.text, assistantText, AbortSignal.timeout(20000));
+      // Titles are utility work — route them to the small model when available.
+      const titleModel = this.utilityModel() ?? model;
+      const title = await generateSessionTitle(titleModel, firstUser.text, assistantText, AbortSignal.timeout(20000));
       if (title && this.currentSessionId === sessionId) {
         this.currentTitle = title;
         this.currentTitleAuto = true;

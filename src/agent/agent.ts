@@ -86,6 +86,8 @@ export interface RunOptions {
   ctx: ToolContext;
   systemAddon: string;
   toolProfile: ToolProfile;
+  /** Smaller model used for context compaction (smart routing); defaults to the main model. */
+  compactModel?: ModelInfo;
   /** Tools provided by connected MCP servers (offered in addition to built-ins). */
   mcpTools?: McpWireTool[];
   /** Executes an MCP tool call (wired to the McpManager). */
@@ -437,7 +439,7 @@ export class AgentSession {
     for (let step = 0; step < steps; step++) {
       if (allowCompact && this.estimateTokens() > compactLimit) {
         const before = this.estimateTokens();
-        const compacted = await this.compact(model, signal, cb.onStatus);
+        const compacted = await this.compact(options.compactModel ?? model, signal, cb.onStatus);
         // If compaction can't shrink the history further, stop trying so we never
         // loop endlessly re-summarizing the same messages.
         if (!compacted || this.estimateTokens() >= before) {

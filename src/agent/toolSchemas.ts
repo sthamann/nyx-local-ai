@@ -423,7 +423,7 @@ const REDUCED_TOOL_NAMES = new Set([
 ]);
 
 /** Model-size heuristic: ids like "qwen2.5-coder:7b" → 7. */
-function parameterBillions(modelId: string): number | undefined {
+export function parameterBillions(modelId: string): number | undefined {
   const match = modelId.toLowerCase().match(/(\d+(?:\.\d+)?)\s*b\b/);
   return match ? Number(match[1]) : undefined;
 }

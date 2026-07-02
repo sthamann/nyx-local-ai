@@ -445,6 +445,14 @@ While the agent is busy, pressing **Enter** queues your message instead of sendi
 ### File-edit diff cards & approval previews
 `write_file` / `edit_file` first show the **proposed diff in the approval card** — you approve what you can see, then it is applied via `WorkspaceEdit` (open editors and undo history stay intact). Applied edits render as cards showing the path, a `+added −removed` badge, and a colored diff preview; click the filename to open the file.
 
+### Smart model routing
+Utility work shouldn't occupy your big model: chat titles and commit messages
+are automatically routed to the **smallest reachable ≤8B model** (e.g. a local
+`qwen2.5-coder:7b`) while the heavyweight on the DGX keeps thinking. Pin a
+specific model with `nyx.utilityModel` — when set explicitly, context
+compaction routes there too. Without a small model everything falls back to
+the active one.
+
 ### Grind mode — fix until green
 The killer economics of local inference: iteration costs nothing. Type
 

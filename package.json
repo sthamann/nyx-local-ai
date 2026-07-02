@@ -357,6 +357,11 @@
             "type": "object"
           }
         },
+        "nyx.utilityModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model for utility work (chat titles, commit messages; when set explicitly, context compaction too). Empty = auto-pick the smallest reachable ≤8B model; falls back to the active model."
+        },
         "nyx.grindMaxIterations": {
           "type": "number",
           "default": 8,
