@@ -6,6 +6,7 @@ import { CheckpointStore } from '../agent/checkpoints';
 import { MemoryStore } from '../agent/memory';
 import { ProcessManager } from '../agent/processes';
 import { resolvePolicy } from '../agent/permissions';
+import type { Autonomy } from '../agent/permissions';
 import { buildRulesSection, loadRules } from '../context/rules';
 import { buildSkillsSection, loadSkills } from '../context/skills';
 import type { SkillMeta } from '../context/skills';
@@ -297,6 +298,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     switch (message.type) {
       case 'ready':
         await this.sessions.init();
+        this.postConfig();
         await this.refreshModels();
         this.postSessions();
         await this.postMachines();
@@ -423,6 +425,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'mentionQuery':
         await this.handleMentionQuery(message.token, message.query);
         return;
+      case 'setAutonomy': {
+        const value = message.value === 'safe' || message.value === 'autopilot' ? message.value : 'balanced';
+        await vscode.workspace.getConfiguration('nyx').update('autonomy', value, vscode.ConfigurationTarget.Global);
+        this.postConfig();
+        this.post({ type: 'status', text: `Autonomy: ${value}` });
+        return;
+      }
       default: {
         const exhaustive: never = message;
         void exhaustive;
@@ -443,6 +452,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       resolver('');
       this.pendingQuestions.delete(id);
     }
+  }
+
+  private autonomy(): Autonomy {
+    const value = vscode.workspace.getConfiguration('nyx').get<string>('autonomy');
+    return value === 'safe' || value === 'autopilot' ? value : 'balanced';
+  }
+
+  private postConfig(): void {
+    this.post({ type: 'config', autonomy: this.autonomy() });
   }
 
   private getQueue(): string[] {
@@ -607,7 +625,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           toolProfile: (cfg.get<string>('toolProfile') as ToolProfile) ?? 'auto',
           mcpTools: this.mcp.getTools(),
           callMcpTool: (server, tool, mcpArgs) => this.mcp.call(server, tool, mcpArgs),
-          resolvePermission: (name) => (this.sessionAllow.has(name) ? 'allow' : resolvePolicy(name, overrides)),
+          resolvePermission: (name) => (this.sessionAllow.has(name) ? 'allow' : resolvePolicy(name, overrides, this.autonomy())),
           grantSessionAllow: (name) => this.sessionAllow.add(name),
           signal: this.abort.signal,
           maxSteps: cfg.get<number>('maxAgentSteps') ?? 25,

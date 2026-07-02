@@ -17,6 +17,11 @@ app.innerHTML = `
         <button id="nyx-mode-agent" type="button" aria-pressed="true" title="Agent — can read, search, edit and run tools in your workspace">Agent</button>
         <button id="nyx-mode-chat" type="button" aria-pressed="false" title="Chat — a plain answer, no tools or file changes">Chat</button>
       </div>
+      <select class="nyx-select nyx-autonomy" id="nyx-autonomy" aria-label="Autonomy" title="Autonomy — how much the agent may do without asking">
+        <option value="safe">&#128737; Safe</option>
+        <option value="balanced">&#9878; Balanced</option>
+        <option value="autopilot">&#128640; Auto</option>
+      </select>
     </div>
     <div class="nyx-plan" id="nyx-plan" hidden aria-label="Agent task plan"></div>
     <div class="nyx-messages" id="nyx-messages" role="log" aria-live="polite"></div>
@@ -132,6 +137,7 @@ export const mentionsEl = el<HTMLDivElement>('nyx-mentions');
 export const planEl = el<HTMLDivElement>('nyx-plan');
 export const sessionTabsEl = el<HTMLDivElement>('nyx-session-tabs');
 export const tabsToggleBtn = el<HTMLButtonElement>('nyx-tabs-toggle');
+export const autonomySelect = el<HTMLSelectElement>('nyx-autonomy');
 export const dropOverlay = el<HTMLDivElement>('nyx-drop');
 export const dropSub = el<HTMLElement>('nyx-drop-sub');
 

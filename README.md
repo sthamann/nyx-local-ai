@@ -336,8 +336,20 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `browser_close` | Close the headless browser | allow |
 | `mcp_<server>_<tool>` | Any tool from a connected MCP server | ask |
 
-### Permissions
-Control any tool with `nyx.toolPermissions`, mapping a tool name to `allow`, `ask`, or `deny`. Use `*` as a fallback. In an approval card, **Always allow** whitelists that tool for the rest of the current chat. MCP tools are governed per-tool (`mcp:<server>/<tool>`) or per-server (`mcp:<server>`). Example:
+### Autonomy presets & permissions
+One switch instead of a JSON file: the **autonomy selector** next to the mode
+toggle picks how much the agent may do without asking —
+
+- 🛡 **Safe**: even network access (`fetch_url`, `web_search`, browser reads) asks first.
+- ⚖ **Balanced** (default): reads and searches are free; edits, commands, and browsing ask.
+- 🚀 **Autopilot**: edits, commands, and browser actions run through — checkpoints
+  and backups are the safety net; deleting files still asks. MCP tools run without prompts.
+
+For fine-tuning, `nyx.toolPermissions` maps any tool name to `allow`, `ask`, or
+`deny` and **always wins** over the preset. Use `*` as a fallback. In an
+approval card, **Always allow** whitelists that tool for the rest of the
+current chat. MCP tools are governed per-tool (`mcp:<server>/<tool>`) or
+per-server (`mcp:<server>`). Example:
 
 ```json
 "nyx.toolPermissions": {
@@ -465,6 +477,7 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.lmStudioUrl` | `http://localhost:1234` | LM Studio server base URL |
 | `nyx.machines` | `[]` | Labeled endpoints (managed via the UI) |
 | `nyx.customEndpoints` | `[]` | Legacy extra OpenAI-compatible endpoints (prefer `nyx.machines`) |
+| `nyx.autonomy` | `balanced` | `safe` / `balanced` / `autopilot` — how much runs without asking |
 | `nyx.toolPermissions` | `{}` | Per-tool `allow` / `ask` / `deny` overrides; MCP tools via `mcp:<server>/<tool>` or `mcp:<server>` |
 | `nyx.maxAgentSteps` | `25` | Max tool iterations per task (a **Continue** button appears at the limit) |
 | `nyx.maxOutputTokens` | `8192` | Hard `max_tokens` cap per generation (0 = off) |

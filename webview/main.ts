@@ -1,5 +1,6 @@
 import type { HostToWebview, ModelInfo } from '../src/types';
 import {
+  autonomySelect,
   chatTitleEl,
   tabsToggleBtn,
   histBtn,
@@ -120,6 +121,9 @@ function populateModels(): void {
 modelSelect.addEventListener('change', () => {
   S.selectedKey = modelSelect.value || undefined;
   persist();
+});
+autonomySelect.addEventListener('change', () => {
+  post({ type: 'setAutonomy', value: autonomySelect.value });
 });
 
 function openHistory(): void {
@@ -310,6 +314,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'plan':
       renderPlan(message.items);
+      return;
+    case 'config':
+      autonomySelect.value = message.autonomy;
       return;
     default: {
       const exhaustive: never = message;

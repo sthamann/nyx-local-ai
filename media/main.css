@@ -1954,3 +1954,10 @@ select.nyx-inp {
 #nyx-tabs-toggle.active {
   color: var(--nyx-accent);
 }
+
+/* ---- v0.26: autonomy preset select ---- */
+.nyx-autonomy {
+  max-width: 108px;
+  flex-shrink: 0;
+  font-size: 11px;
+}

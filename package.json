@@ -266,6 +266,16 @@
             }
           }
         },
+        "nyx.autonomy": {
+          "type": "string",
+          "enum": [
+            "safe",
+            "balanced",
+            "autopilot"
+          ],
+          "default": "balanced",
+          "description": "How much the agent may do without asking: 'safe' (network access asks too), 'balanced' (reads free, mutations ask), 'autopilot' (edits/commands run through; deleting files still asks). Per-tool nyx.toolPermissions overrides always win."
+        },
         "nyx.toolPermissions": {
           "type": "object",
           "default": {},

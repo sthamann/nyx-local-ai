@@ -200,7 +200,9 @@ export type WebviewToHost =
   // Long-running command control.
   | { type: 'killProcess'; id: string }
   // @-mention autocomplete.
-  | { type: 'mentionQuery'; token: string; query: string };
+  | { type: 'mentionQuery'; token: string; query: string }
+  /** Changes the autonomy preset (safe | balanced | autopilot). */
+  | { type: 'setAutonomy'; value: string };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -237,4 +239,6 @@ export type HostToWebview =
   | { type: 'composerSet'; text: string }
   | { type: 'mentionResults'; token: string; files: string[] }
   /** The agent's current task plan (empty array hides the card). */
-  | { type: 'plan'; items: PlanItem[] };
+  | { type: 'plan'; items: PlanItem[] }
+  /** Host-side config the UI mirrors (autonomy preset). */
+  | { type: 'config'; autonomy: string };
