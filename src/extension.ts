@@ -128,6 +128,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('nyx.checkForUpdates', () => {
       void checkForUpdates(context, true);
     }),
+    vscode.commands.registerCommand('nyx.exportChat', () => {
+      void provider.exportCurrentSession();
+    }),
   );
   void checkForUpdates(context);
 

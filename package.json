@@ -115,6 +115,11 @@
         "command": "nyx.checkForUpdates",
         "title": "Check for Updates",
         "category": "Nyx"
+      },
+      {
+        "command": "nyx.exportChat",
+        "title": "Export Chat as Markdown",
+        "category": "Nyx"
       }
     ],
     "keybindings": [

@@ -737,6 +737,9 @@ storage; project memory lives in the workspace state.
 | *Nyx: Attach Files or Folders…* | Open the native file/folder picker |
 | *Nyx: Build/Update Semantic Index* | Index new/changed files for `semantic_search` |
 | *Nyx: Rebuild Semantic Index from Scratch* | Drop and re-embed the whole index |
+| *Nyx: Toggle Tab Autocomplete* | Turn inline FIM completions on/off |
+| *Nyx: Check for Updates* | Query GitHub releases and offer a one-click update |
+| *Nyx: Export Chat as Markdown* | Save the current chat (incl. tool cards) as a .md file |
 
 Default keybindings: `Cmd/Ctrl+Alt+N` show panel · `Cmd/Ctrl+Alt+Shift+N` new chat · `Cmd/Ctrl+Alt+L` add selection.
 

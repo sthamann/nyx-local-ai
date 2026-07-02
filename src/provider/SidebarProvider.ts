@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
 import { discoverModels, probeMachine } from '../models/discovery';
 import { MachineStore } from '../models/machines';
 import { AgentSession, generateSessionTitle } from '../agent/agent';
@@ -1271,6 +1272,54 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     };
     await this.sessions.save(record);
     this.captureMemory(title);
+  }
+
+  /** Exports the current chat as a readable Markdown file. */
+  async exportCurrentSession(): Promise<void> {
+    if (this.currentDisplay.length === 0) {
+      void vscode.window.showInformationMessage('Nyx: nothing to export — this chat is empty.');
+      return;
+    }
+    const title = this.currentTitle?.trim() || 'nyx-chat';
+    const lines: string[] = [
+      `# ${title}`,
+      '',
+      `> Exported from Nyx on ${new Date().toLocaleString()}${this.currentModelLabel ? ` · model: ${this.currentModelLabel}` : ''}${this.currentMachineName ? ` (${this.currentMachineName})` : ''}`,
+      '',
+    ];
+    for (const item of this.currentDisplay) {
+      switch (item.kind) {
+        case 'user':
+          lines.push('## 🧑 You', '', item.text, '');
+          break;
+        case 'assistant':
+          lines.push('## 🌙 Nyx', '', item.text, '');
+          break;
+        case 'tool': {
+          const summary = `${item.ok ? '✓' : '✗'} \`${item.name}\`${item.filePath ? ` — ${item.filePath}` : ''}${item.diff ? ` (+${item.diff.added} −${item.diff.removed})` : ''}`;
+          lines.push('<details>', `<summary>${summary}</summary>`, '', '```', item.content.slice(0, 4000), '```', '', '</details>', '');
+          break;
+        }
+        case 'question':
+          lines.push(`> ❓ **${item.question}**`, `> ➡ ${item.answer}`, '');
+          break;
+        default: {
+          const exhaustive: never = item;
+          void exhaustive;
+        }
+      }
+    }
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'nyx-chat';
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.joinPath(this.workspaceRoot() ?? vscode.Uri.file(os.homedir()), `${slug}.md`),
+      filters: { Markdown: ['md'] },
+      saveLabel: 'Export chat',
+    });
+    if (!target) {
+      return;
+    }
+    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(lines.join('\n')));
+    await vscode.window.showTextDocument(target, { preview: true });
   }
 
   /** Distills the current session into a project-memory entry (heuristic, no model call). */
