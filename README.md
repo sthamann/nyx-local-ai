@@ -23,7 +23,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.25.2**. Local-first and fully offline-capable (the only optional
+> Status: **v0.26.0**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -161,26 +161,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.25.2.vsix
+npm run package    # produces nyx-local-ai-0.26.0.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.25.2.vsix --force
+cursor --install-extension nyx-local-ai-0.26.0.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.25.2.vsix --force
+code --install-extension nyx-local-ai-0.26.0.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.25.2.vsix --force
+  --install-extension nyx-local-ai-0.26.0.vsix --force
 ```
 
 </details>
@@ -567,7 +567,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.25.2.vsix --force
+cursor --install-extension nyx-local-ai-0.26.0.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
