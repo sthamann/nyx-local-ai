@@ -415,7 +415,11 @@ Attach context for the next message via:
 - drag files onto the **Attach files (drop here)** strip below the chat (no Shift needed),
 - or drag onto the chat panel while holding **Shift** (VS Code webview limitation).
 
+- **paste an image from the clipboard** (screenshot → `Cmd/Ctrl+V` in the composer).
+
 Text files are inlined (truncated if large), folders are listed, and media files run through the vision/PDF toolchain. If the active model advertises **vision** support, attached images are passed to it natively (base64) instead of being described by the helper vision model.
+
+The composer also keeps a **prompt history**: press ↑ (with the caret at the start or an empty input) to recall earlier prompts shell-style, ↓ to walk back to your draft.
 
 ### Vision & PDF toolchain
 So even non-vision models can work with images and PDFs:

@@ -202,7 +202,9 @@ export type WebviewToHost =
   // @-mention autocomplete.
   | { type: 'mentionQuery'; token: string; query: string }
   /** Changes the autonomy preset (safe | balanced | autopilot). */
-  | { type: 'setAutonomy'; value: string };
+  | { type: 'setAutonomy'; value: string }
+  /** An image pasted from the clipboard into the composer. */
+  | { type: 'attachImage'; dataBase64: string; mime: string };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =

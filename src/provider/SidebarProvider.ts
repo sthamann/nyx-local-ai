@@ -432,6 +432,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this.post({ type: 'status', text: `Autonomy: ${value}` });
         return;
       }
+      case 'attachImage':
+        await this.attachPastedImage(message.dataBase64, message.mime);
+        return;
       default: {
         const exhaustive: never = message;
         void exhaustive;
@@ -898,6 +901,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Opens the native file/folder picker to attach items (used by the drop zone view). */
   async pickAttachments(): Promise<void> {
     await this.attachViaDialog();
+  }
+
+  /** Saves a clipboard-pasted image to storage and attaches it (vision/OCR pipeline applies). */
+  private async attachPastedImage(dataBase64: string, mime: string): Promise<void> {
+    const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+    const dir = vscode.Uri.joinPath(this.context.globalStorageUri, 'pastes');
+    await vscode.workspace.fs.createDirectory(dir).then(undefined, () => undefined);
+    const uri = vscode.Uri.joinPath(dir, `pasted-${Date.now()}.${ext}`);
+    try {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(dataBase64, 'base64'));
+      await this.attachUris([uri]);
+      this.post({ type: 'status', text: 'Image attached from clipboard.' });
+    } catch (e) {
+      this.post({ type: 'error', text: `Could not attach pasted image: ${e instanceof Error ? e.message : String(e)}` });
+    }
   }
 
   private async attachViaDialog(): Promise<void> {

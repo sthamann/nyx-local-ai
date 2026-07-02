@@ -28,6 +28,59 @@ import { persist, post, S } from './state';
 
 let queueCollapsed = false;
 
+// ---- Prompt history (shell-style arrow-up recall) ----
+
+const HISTORY_CAP = 50;
+let histIdx: number | null = null;
+let draftBeforeNav = '';
+
+function rememberPrompt(text: string): void {
+  const history = S.promptHistory;
+  if (history[history.length - 1] !== text) {
+    history.push(text);
+    if (history.length > HISTORY_CAP) {
+      history.splice(0, history.length - HISTORY_CAP);
+    }
+  }
+  histIdx = null;
+  persist();
+}
+
+/** Returns true when the key was consumed by history navigation. */
+function historyKeydown(e: KeyboardEvent): boolean {
+  const history = S.promptHistory;
+  if (history.length === 0) {
+    return false;
+  }
+  const atStart = inputEl.selectionStart === 0 && inputEl.selectionEnd === 0;
+  const atEnd = inputEl.selectionStart === inputEl.value.length;
+  if (e.key === 'ArrowUp' && (inputEl.value === '' || atStart || histIdx !== null)) {
+    if (histIdx === null) {
+      draftBeforeNav = inputEl.value;
+      histIdx = history.length;
+    }
+    if (histIdx > 0) {
+      histIdx--;
+      setComposerText(history[histIdx]);
+    }
+    return true;
+  }
+  if (e.key === 'ArrowDown' && histIdx !== null && atEnd) {
+    histIdx++;
+    if (histIdx >= history.length) {
+      histIdx = null;
+      setComposerText(draftBeforeNav);
+    } else {
+      setComposerText(history[histIdx]);
+    }
+    return true;
+  }
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+    histIdx = null;
+  }
+  return false;
+}
+
 // ---- Sending ----
 
 export function sendText(text: string): void {
@@ -45,6 +98,7 @@ export function submitInput(): void {
     }
     return;
   }
+  rememberPrompt(text);
   if (S.busy) {
     post({ type: 'queueAdd', text });
   } else {
@@ -420,9 +474,41 @@ export function initComposer(): void {
       e.preventDefault();
       return;
     }
+    if (historyKeydown(e)) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       submitInput();
+    }
+  });
+
+  // Paste an image straight from the clipboard (screenshot → Cmd+V).
+  inputEl.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) {
+      return;
+    }
+    for (const item of items) {
+      if (!item.type.startsWith('image/')) {
+        continue;
+      }
+      const file = item.getAsFile();
+      if (!file) {
+        continue;
+      }
+      e.preventDefault();
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = String(reader.result ?? '');
+        const base64 = url.slice(url.indexOf(',') + 1);
+        if (base64) {
+          post({ type: 'attachImage', dataBase64: base64, mime: item.type });
+        }
+      };
+      reader.readAsDataURL(file);
+      return;
     }
   });
   inputEl.addEventListener('blur', () => {

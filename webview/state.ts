@@ -17,6 +17,7 @@ interface PersistedState {
   mode?: ChatMode;
   draft?: string;
   showSessionTabs?: boolean;
+  promptHistory?: string[];
 }
 
 const saved = (vscode.getState() as PersistedState | undefined) ?? {};
@@ -36,6 +37,7 @@ export const S = {
   historyFilter: '',
   savedDraft: saved.draft ?? '',
   showSessionTabs: saved.showSessionTabs ?? true,
+  promptHistory: saved.promptHistory ?? ([] as string[]),
 };
 
 export function persist(draft?: string): void {
@@ -45,5 +47,6 @@ export function persist(draft?: string): void {
     mode: S.mode,
     draft: liveDraft,
     showSessionTabs: S.showSessionTabs,
+    promptHistory: S.promptHistory,
   } satisfies PersistedState);
 }
