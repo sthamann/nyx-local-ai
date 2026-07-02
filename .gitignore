@@ -10,8 +10,8 @@ media/main.js.map
 # Packaged extension
 *.vsix
 
-# Local dev harness
-.harness/
+# (.harness/ is tracked: smoke tests, eval harness, and the UI screenshot
+# scenes are part of the project's quality gates.)
 
 # OCR tessdata (downloaded at runtime)
 *.traineddata

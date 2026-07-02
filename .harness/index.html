@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --vscode-editor-background: #1e1e1e;
+        --vscode-sideBar-background: #181818;
+        --vscode-foreground: #cccccc;
+        --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --vscode-editor-font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        --vscode-font-size: 13px;
+        --vscode-list-hoverBackground: rgba(255, 255, 255, 0.06);
+        --vscode-list-activeSelectionBackground: rgba(64, 120, 242, 0.28);
+        --vscode-charts-purple: #b180d7;
+        --vscode-errorForeground: #f48771;
+        --vscode-descriptionForeground: #9d9d9d;
+        --vscode-input-background: #232323;
+        --vscode-input-foreground: #cccccc;
+        --vscode-button-background: #0e639c;
+        --vscode-button-foreground: #ffffff;
+        --vscode-button-secondaryBackground: #3a3d41;
+        --vscode-button-secondaryForeground: #ffffff;
+        --vscode-focusBorder: #4daafc;
+        --vscode-panel-border: rgba(255, 255, 255, 0.09);
+        --vscode-widget-border: rgba(255, 255, 255, 0.14);
+        --vscode-dropdown-background: #232323;
+        --vscode-dropdown-border: #3c3c3c;
+        --vscode-textCodeBlock-background: #101010;
+        --vscode-inputValidation-warningBorder: #c8a000;
+        --vscode-inputValidation-warningBackground: rgba(200, 160, 0, 0.09);
+        --vscode-inputValidation-errorBorder: #d64545;
+        --vscode-inputValidation-errorBackground: rgba(214, 69, 69, 0.08);
+        --vscode-textLink-foreground: #4daafc;
+        --vscode-badge-background: #3d3d3d;
+        --vscode-badge-foreground: #eaeaea;
+        --vscode-diffEditor-insertedTextBackground: rgba(60, 175, 90, 0.18);
+        --vscode-diffEditor-removedTextBackground: rgba(220, 80, 80, 0.18);
+        --vscode-debugTokenExpression-name: #569cd6;
+        --vscode-debugTokenExpression-string: #ce9178;
+        --vscode-debugTokenExpression-number: #b5cea8;
+        --vscode-debugTokenExpression-value: #dcdcaa;
+        --vscode-symbolIcon-classForeground: #4ec9b0;
+        --vscode-symbolIcon-fieldForeground: #9cdcfe;
+        --vscode-scrollbarSlider-background: rgba(255, 255, 255, 0.14);
+      }
+      html, body { margin: 0; min-height: 100vh; }
+      body.shot {
+        background: radial-gradient(1200px 700px at 20% 0%, #22283a 0%, #14161d 55%, #0e0f13 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 34px;
+      }
+      .frame {
+        width: 430px;
+        height: 780px;
+        background: var(--vscode-sideBar-background);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 12px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      #app { display: flex; flex-direction: column; height: 100%; }
+    </style>
+    <link rel="stylesheet" href="../media/main.css" />
+  </head>
+  <body class="shot">
+    <div class="frame"><div id="app"></div></div>
+    <script>
+      const state = {};
+      window.acquireVsCodeApi = () => ({
+        postMessage: (m) => console.log('post', JSON.stringify(m)),
+        getState: () => state,
+        setState: (s) => Object.assign(state, s),
+      });
+    </script>
+    <script src="../media/main.js"></script>
+    <script>
+      const send = (data) => window.dispatchEvent(new MessageEvent('message', { data }));
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const scene = new URLSearchParams(location.search).get('scene') || 'chat';
+
+      const MODELS = [
+        { id: 'deepseek-v4-flash-dspark', key: 'dgx:deepseek-v4-flash-dspark', label: 'deepseek-v4-flash', provider: 'custom', endpoint: 'http://192.168.1.77:8888/v1', capabilities: ['tools', 'thinking'], contextLength: 1048576, machineId: 'dgx', machineName: 'DGX Cluster' },
+        { id: 'glm-5.2-iq2', key: 'mac:glm-5.2-iq2', label: 'GLM-5.2 (2-bit)', provider: 'ollama', endpoint: 'http://localhost:11434/v1', capabilities: ['tools', 'vision', 'thinking'], machineId: 'mac', machineName: 'Mac Studio' },
+        { id: 'qwen2.5-coder:32b', key: 'mac:qwen2.5-coder:32b', label: 'qwen2.5-coder:32b', provider: 'ollama', endpoint: 'http://localhost:11434/v1', capabilities: ['tools'], machineId: 'mac', machineName: 'Mac Studio' },
+      ];
+
+      async function sceneChat() {
+        send({ type: 'models', models: MODELS, selectedKey: 'dgx:deepseek-v4-flash-dspark' });
+        send({ type: 'sessions', sessions: [{ id: 's1', title: 'Harden tool permission fallback', updatedAt: Date.now(), addedLines: 14, removedLines: 3, changedFiles: 1 }], currentId: 's1' });
+        send({ type: 'userMessage', text: 'Why does a denied tool still run when the name has an mcp: prefix? Find and fix it.', checkpointId: 'cp1' });
+        send({ type: 'busy', busy: true });
+        send({ type: 'reasoning', text: 'The user reports a permission bypass. Likely the wildcard fallback is consulted before the per-server rule. I should inspect resolvePolicy.' });
+        await sleep(1100);
+        send({ type: 'toolCall', id: 't1', name: 'semantic_search', args: JSON.stringify({ query: 'where are tool permissions resolved?' }) });
+        send({ type: 'toolResult', id: 't1', ok: true, content: '1. src/agent/permissions.ts:33-53 (score 0.812)\nexport function resolvePolicy(name, overrides) { ...\n\n2. src/agent/agent.ts:471-489 (score 0.634)\nprivate async runTool(name, args, policy, ...' });
+        send({ type: 'toolCall', id: 't2', name: 'read_file', args: JSON.stringify({ path: 'src/agent/permissions.ts' }) });
+        send({ type: 'toolResult', id: 't2', ok: true, content: 'export function resolvePolicy(name: string, overrides: Record<string, unknown>): PermissionPolicy { ... }' });
+        send({ type: 'toolCall', id: 't3', name: 'edit_file', args: JSON.stringify({ path: 'src/agent/permissions.ts', old_string: 'if (DEFAULTS[name])', new_string: 'if (name.startsWith("mcp:")) { return "ask"; }\n  if (DEFAULTS[name])' }) });
+        send({
+          type: 'toolResult', id: 't3', ok: true, content: 'Updated src/agent/permissions.ts (+2 −0).', filePath: 'src/agent/permissions.ts',
+          diff: { added: 2, removed: 0, preview: ['+  if (name.startsWith("mcp:")) {', '+    return "ask";', '+  }'] },
+        });
+        send({ type: 'toolCall', id: 't4', name: 'get_diagnostics', args: JSON.stringify({ path: 'src/agent/permissions.ts' }) });
+        send({ type: 'toolResult', id: 't4', ok: true, content: 'No diagnostics.' });
+        send({ type: 'assistantStart' });
+        const answer = 'Found it: unknown `mcp:` tools fell through to the `*` wildcard before the per-server rule was checked. Fixed in `resolvePolicy`:\n\n```ts\nif (name.startsWith(\'mcp:\')) {\n  return \'ask\'; // safe default for MCP tools\n}\n```\n\nDiagnostics are clean — MCP tools now always require approval unless you allow them explicitly.';
+        for (const piece of answer.match(/[\s\S]{1,24}/g)) { send({ type: 'assistantDelta', text: piece }); }
+        await sleep(300);
+        send({ type: 'assistantEnd' });
+        send({ type: 'stats', tokensPerSecond: 38.4, completionTokens: 1236, estimated: false });
+        send({ type: 'context', usedTokens: 41200, budgetTokens: 1048576 });
+        send({ type: 'busy', busy: false });
+      }
+
+      async function sceneApproval() {
+        send({ type: 'models', models: MODELS, selectedKey: 'mac:glm-5.2-iq2' });
+        send({ type: 'sessions', sessions: [{ id: 's2', title: 'Add rate limiting to the API', updatedAt: Date.now(), addedLines: 0, removedLines: 0, changedFiles: 0 }], currentId: 's2' });
+        send({ type: 'userMessage', text: 'Add a simple in-memory rate limiter to the /api/search route.', checkpointId: 'cp2' });
+        send({ type: 'busy', busy: true });
+        send({ type: 'toolCall', id: 'a1', name: 'mcp_codebase-memory-mcp_search_code', args: JSON.stringify({ query: 'api search route handler' }) });
+        send({ type: 'toolResult', id: 'a1', ok: true, content: 'src/routes/search.ts → handler searchRoute(), called from src/server.ts:41' });
+        send({ type: 'toolCall', id: 'a2', name: 'read_file', args: JSON.stringify({ path: 'src/routes/search.ts' }) });
+        send({ type: 'toolResult', id: 'a2', ok: true, content: 'export async function searchRoute(req, res) { ... }' });
+        send({ type: 'queue', items: ['Then add tests for the limiter', 'Update the API docs'] });
+        send({
+          type: 'approvalRequest', id: 'ap1', name: 'edit_file',
+          args: JSON.stringify({ path: 'src/routes/search.ts' }), filePath: 'src/routes/search.ts',
+          diff: {
+            added: 9, removed: 1,
+            preview: [
+              '-export async function searchRoute(req, res) {',
+              '+const hits = new Map();',
+              '+',
+              '+export async function searchRoute(req, res) {',
+              '+  const key = req.ip;',
+              '+  const now = Date.now();',
+              '+  const recent = (hits.get(key) ?? []).filter(t => now - t < 60_000);',
+              '+  if (recent.length >= 30) {',
+              '+    return res.status(429).json({ error: "rate limit exceeded" });',
+              '+  }',
+            ],
+          },
+        });
+      }
+
+      async function sceneMachines() {
+        send({ type: 'models', models: MODELS, selectedKey: 'dgx:deepseek-v4-flash-dspark' });
+        send({
+          type: 'machines',
+          machines: [
+            { id: 'dgx', name: 'DGX Cluster', hardware: '2× DGX Spark', type: 'openai', url: 'http://192.168.1.77:8888/v1', enabled: true, hasApiKey: true, models: [{ id: 'deepseek-v4-flash-dspark', enabled: true }] },
+            { id: 'mac', name: 'Mac Studio', hardware: 'M3 Ultra · 256 GB', type: 'ollama', url: 'http://localhost:11434', enabled: true, models: [{ id: 'glm-5.2-iq2', enabled: true, alias: 'GLM-5.2 (2-bit)' }, { id: 'qwen2.5-coder:32b', enabled: true }] },
+            { id: 'lmstudio-local', name: 'LM Studio (localhost)', hardware: 'This machine', type: 'lmstudio', url: 'http://localhost:1234', enabled: false },
+          ],
+        });
+        document.getElementById('nyx-manage').click();
+      }
+
+      (async () => {
+        if (scene === 'approval') { await sceneApproval(); }
+        else if (scene === 'machines') { await sceneMachines(); }
+        else { await sceneChat(); }
+        document.title = `nyx-scene-${scene}-ready`;
+      })();
+    </script>
+  </body>
+</html>
