@@ -70,6 +70,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private stopRequested = false;
   private lastUserText: string | undefined;
   private currentPlan: PlanItem[] = [];
+  /** Active fix-until-green loop (started via "/grind <command>"). */
+  private grind: { command: string; iteration: number; max: number } | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.memory = new MemoryStore(context.workspaceState);
@@ -248,6 +250,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.currentMachineName = undefined;
     this.currentMode = undefined;
     this.lastUserText = undefined;
+    this.grind = undefined;
     this.currentPlan = [];
     this.post({ type: 'plan', items: [] });
     this.setQueue([]);
@@ -371,6 +374,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       case 'cancel':
         this.stopRequested = true;
+        this.grind = undefined;
         this.cancelRun();
         return;
       case 'toolDecision': {
@@ -546,6 +550,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (this.busy) {
       this.setQueue([...this.getQueue(), text]);
       return;
+    }
+
+    // "/grind <command>" starts a fix-until-green loop: after each agent turn
+    // the host runs the command itself and feeds failures back until it passes.
+    if (text.trimStart().startsWith('/grind ')) {
+      const stripped = text.trimStart().slice('/grind '.length);
+      const [commandLine, ...goalLines] = stripped.split('\n');
+      const command = commandLine.trim();
+      if (!command) {
+        this.post({ type: 'error', text: 'Usage: /grind <command> — e.g. "/grind npm test".' });
+        return;
+      }
+      const max = Math.max(1, vscode.workspace.getConfiguration('nyx').get<number>('grindMaxIterations') ?? 8);
+      this.grind = { command, iteration: 0, max };
+      this.post({ type: 'status', text: `Grind: running \`${command}\` to capture the baseline…` });
+      const baseline = await this.processes.run(command, { cwd: this.workspaceRoot()?.fsPath, timeoutMs: 300000 });
+      if (baseline.ok) {
+        this.grind = undefined;
+        this.post({ type: 'status', text: `Grind: \`${command}\` already passes — nothing to fix.` });
+        return;
+      }
+      const goal = goalLines.join('\n').trim();
+      text =
+        `Make \`${command}\` pass. Fix the underlying code (not the tests, unless they are clearly wrong).` +
+        (goal ? `\nAdditional context: ${goal}` : '') +
+        `\n\nCurrent failing output:\n\`\`\`\n${baseline.output.trim().slice(-4000)}\n\`\`\``;
     }
     const model = this.findModel(modelKey);
     if (!model) {
@@ -735,9 +765,45 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.notifyDone();
       if (!aborted) {
         void this.maybeGenerateTitle(model);
-        void this.drainQueue();
+        if (this.grind) {
+          await this.continueGrind();
+        } else {
+          void this.drainQueue();
+        }
       }
     }
+  }
+
+  /** One grind iteration: re-run the command; on failure feed the output back. */
+  private async continueGrind(): Promise<void> {
+    const grind = this.grind;
+    if (!grind || this.stopRequested) {
+      return;
+    }
+    grind.iteration++;
+    this.post({ type: 'status', text: `Grind ${grind.iteration}/${grind.max}: running \`${grind.command}\`…` });
+    const result = await this.processes.run(grind.command, { cwd: this.workspaceRoot()?.fsPath, timeoutMs: 300000 });
+    if (result.ok) {
+      this.grind = undefined;
+      this.post({ type: 'status', text: `Grind: \`${grind.command}\` passes after ${grind.iteration} iteration(s) ✅` });
+      void this.drainQueue();
+      return;
+    }
+    if (grind.iteration >= grind.max) {
+      this.grind = undefined;
+      this.post({
+        type: 'error',
+        text: `Grind stopped: \`${grind.command}\` still fails after ${grind.max} iterations. Last output:\n${result.output.trim().slice(-800)}`,
+        canRetry: false,
+      });
+      void this.drainQueue();
+      return;
+    }
+    await this.onSend(
+      `\`${grind.command}\` still fails (attempt ${grind.iteration}/${grind.max}). Analyze the NEW output below, fix the remaining problems, and do not repeat changes that did not help.\n\n\`\`\`\n${result.output.trim().slice(-4000)}\n\`\`\``,
+      this.currentModelKey ?? this.selectedKey ?? '',
+      this.currentMode ?? 'agent',
+    );
   }
 
   // ---- Checkpoints, retry, message editing ----

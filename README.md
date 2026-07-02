@@ -445,6 +445,22 @@ While the agent is busy, pressing **Enter** queues your message instead of sendi
 ### File-edit diff cards & approval previews
 `write_file` / `edit_file` first show the **proposed diff in the approval card** — you approve what you can see, then it is applied via `WorkspaceEdit` (open editors and undo history stay intact). Applied edits render as cards showing the path, a `+added −removed` badge, and a colored diff preview; click the filename to open the file.
 
+### Grind mode — fix until green
+The killer economics of local inference: iteration costs nothing. Type
+
+```
+/grind npm test
+```
+
+and Nyx enters a **fix-until-green loop**: it captures the failing output,
+lets the agent fix the code, then **runs the command itself** after every
+agent turn — feeding fresh failures back (with a "don't repeat what didn't
+help" instruction) until the command passes or `nyx.grindMaxIterations`
+(default 8) is reached. Every iteration gets its own checkpoint, **Stop**
+aborts the loop, and if the command already passes Nyx tells you instead of
+burning cycles. Combine with 🚀 Autopilot autonomy and let your own hardware
+grind while you get coffee — no per-token bill.
+
 ### Review changes & one-click commit
 The **✎ N changed** chip next to the context meter opens the review view: the
 **net diff of the whole chat** (checkpoint originals vs. disk), one card per

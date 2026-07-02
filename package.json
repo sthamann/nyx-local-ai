@@ -357,6 +357,11 @@
             "type": "object"
           }
         },
+        "nyx.grindMaxIterations": {
+          "type": "number",
+          "default": 8,
+          "description": "Max fix-and-retest iterations for the /grind fix-until-green loop."
+        },
         "nyx.systemPromptAppend": {
           "type": "string",
           "default": "",
