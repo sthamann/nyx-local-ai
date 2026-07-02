@@ -61,7 +61,7 @@ export interface ToolContext {
   /** Publishes the agent's task plan to the UI (set_plan tool). */
   setPlan?: (items: PlanItem[]) => void;
   memory?: {
-    recall: (query: string | undefined, limit: number) => string;
+    recall: (query: string | undefined, limit: number) => Promise<string>;
     save: (title: string, summary: string, files: string[]) => string;
   };
 }
@@ -216,6 +216,10 @@ export async function executeTool(name: string, rawArgs: string, ctx: ToolContex
       return runScript(ctx, String(args.language ?? ''), String(args.code ?? ''));
     case 'run_command':
       return runCommand(ctx, String(args.command ?? ''), args.background === true);
+    case 'git_diff':
+      return gitDiff(ctx, args.staged === true, args.path ? String(args.path) : undefined);
+    case 'git_log':
+      return gitLog(ctx, Number(args.limit) || 15);
     case 'check_process':
       return checkProcess(ctx, String(args.id ?? ''));
     case 'kill_process':
@@ -1151,6 +1155,54 @@ async function runCommand(ctx: ToolContext, command: string, background: boolean
   return result.ok ? { ok: true, content: body } : { ok: false, content: `Command failed (exit ${result.exitCode}):\n${body}` };
 }
 
+// ---- Git context (read-only, no approval friction) ----
+
+/** Quotes a path for safe use inside a shell command. */
+function shellQuote(p: string): string {
+  return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
+async function runGit(ctx: ToolContext, command: string): Promise<ToolOutcome> {
+  if (!ctx.processes) {
+    return { ok: false, content: 'Process execution is not available in this context.' };
+  }
+  const result = await ctx.processes.run(command, {
+    cwd: primaryRoot(ctx).fsPath,
+    timeoutMs: 30000,
+    signal: ctx.signal,
+  });
+  if (!result.ok) {
+    return { ok: false, content: truncate(`git failed (exit ${result.exitCode}):\n${result.output.trim().slice(0, 2000)}`) };
+  }
+  return { ok: true, content: truncate(result.output.trim() || '(no output)') };
+}
+
+/** Read-only working-tree diff ("what did I just change?") without run_command approval friction. */
+async function gitDiff(ctx: ToolContext, staged: boolean, p?: string): Promise<ToolOutcome> {
+  try {
+    const scope = p && p.trim() ? ` -- ${shellQuote(p.trim())}` : '';
+    const diff = await runGit(ctx, `git diff${staged ? ' --cached' : ''}${scope}`);
+    if (!diff.ok) {
+      return diff;
+    }
+    const status = await runGit(ctx, 'git status --short');
+    const body = diff.content === '(no output)' ? '(no changes)' : diff.content;
+    return { ok: true, content: `${body}\n\n--- git status --short ---\n${status.ok ? status.content : status.content}` };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+/** Recent commit history (read-only). */
+async function gitLog(ctx: ToolContext, limit: number): Promise<ToolOutcome> {
+  try {
+    const n = Math.min(100, Math.max(1, Math.floor(limit)));
+    return await runGit(ctx, `git log --oneline --decorate -${n}`);
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
 function checkProcess(ctx: ToolContext, id: string): ToolOutcome {
   if (!ctx.processes) {
     return { ok: false, content: 'Process execution is not available in this context.' };
@@ -1224,11 +1276,11 @@ function setPlan(ctx: ToolContext, raw: unknown): ToolOutcome {
   return { ok: true, content: `Plan updated: ${done}/${items.length} done.` };
 }
 
-function recallMemory(ctx: ToolContext, query: string | undefined, limit: number): ToolOutcome {
+async function recallMemory(ctx: ToolContext, query: string | undefined, limit: number): Promise<ToolOutcome> {
   if (!ctx.memory) {
     return { ok: false, content: 'Memory is not available in this context.' };
   }
-  return { ok: true, content: ctx.memory.recall(query, Math.min(20, Math.max(1, limit))) };
+  return { ok: true, content: await ctx.memory.recall(query, Math.min(20, Math.max(1, limit))) };
 }
 
 function saveMemory(ctx: ToolContext, title: string, summary: string, files: string[]): ToolOutcome {

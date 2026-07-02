@@ -1,4 +1,4 @@
-import type { AttachmentMeta, ChatMode } from '../src/types';
+import type { AttachmentMeta, ChatMode, NetworkLogEntry } from '../src/types';
 import {
   attachBtn,
   attachRow,
@@ -13,11 +13,13 @@ import {
   mentionsEl,
   modeAgentBtn,
   modeChatBtn,
+  privacyBtn,
   queueCaret,
   queueClear,
   queueCount,
   queueEl,
   queueList,
+  queueRunBtn,
   queueToggle,
   scrollToBottom,
   sendBtn,
@@ -280,6 +282,62 @@ export function showContextDetail(parts: Array<{ label: string; tokens: number }
   (contextEl.parentElement ?? document.body).appendChild(popup);
 }
 
+// ---- Privacy report popup (per-session network log) ----
+
+/** Closes the privacy popup (also on chat switch — the log is per session). */
+export function closePrivacyPopup(): void {
+  document.getElementById('nyx-privacy-popup')?.remove();
+}
+
+/** Lists every host the session contacted, so "no cloud calls" is checkable. */
+export function showNetworkLog(entries: NetworkLogEntry[]): void {
+  closePrivacyPopup();
+  const popup = document.createElement('div');
+  popup.id = 'nyx-privacy-popup';
+  popup.className = 'nyx-ctx-popup';
+  popup.setAttribute('role', 'dialog');
+  popup.setAttribute('aria-label', 'Privacy report — contacted hosts');
+
+  const head = document.createElement('div');
+  head.className = 'nyx-ctx-popup-head';
+  head.textContent = entries.length === 0 ? 'No network activity this session' : `Hosts contacted this session (${entries.length})`;
+  popup.appendChild(head);
+
+  for (const entry of entries.slice(0, 20)) {
+    const row = document.createElement('div');
+    row.className = 'nyx-ctx-popup-row';
+    const label = document.createElement('span');
+    label.textContent = entry.host;
+    label.title = entry.purposes.join(', ');
+    const value = document.createElement('span');
+    value.className = 'nyx-ctx-popup-tokens';
+    value.textContent = `${entry.purposes.join(', ')} · ${entry.count}×`;
+    row.appendChild(label);
+    row.appendChild(value);
+    popup.appendChild(row);
+  }
+
+  const note = document.createElement('div');
+  note.className = 'nyx-ctx-popup-row nyx-privacy-note';
+  note.textContent =
+    entries.length === 0
+      ? 'Model calls, fetches, and downloads will appear here.'
+      : 'Local/LAN hosts are your own machines; anything else was explicitly triggered (web search, URL fetch, downloads).';
+  popup.appendChild(note);
+
+  const actions = document.createElement('div');
+  actions.className = 'nyx-ctx-popup-actions';
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'nyx-btn secondary';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', closePrivacyPopup);
+  actions.appendChild(closeBtn);
+  popup.appendChild(actions);
+
+  (privacyBtn.parentElement ?? document.body).appendChild(popup);
+}
+
 // ---- @-mention autocomplete (#11) ----
 
 let mentionToken = 0;
@@ -517,7 +575,15 @@ export function initComposer(): void {
     renderQueue();
   });
   queueClear.addEventListener('click', () => post({ type: 'queueSet', items: [] }));
+  queueRunBtn.addEventListener('click', () => post({ type: 'queueRunAll' }));
   attachBtn.addEventListener('click', () => post({ type: 'attachPick' }));
+  privacyBtn.addEventListener('click', () => {
+    if (document.getElementById('nyx-privacy-popup')) {
+      closePrivacyPopup();
+    } else {
+      post({ type: 'getNetworkLog' });
+    }
+  });
   contextEl.addEventListener('click', () => {
     if (document.getElementById('nyx-ctx-popup')) {
       closeContextPopup();

@@ -2094,3 +2094,111 @@ select.nyx-inp {
 .nyx-composer .nyx-subbar {
   position: relative;
 }
+
+/* ---- v0.27: guided first-run (empty state) ---- */
+.nyx-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  text-align: left;
+}
+
+.nyx-setup-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.nyx-setup-row .nyx-setup-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.nyx-setup-row .nyx-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.nyx-setup-ok {
+  color: var(--vscode-testing-iconPassed, #6bbf59);
+  font-weight: 600;
+}
+
+.nyx-setup-todo {
+  color: var(--nyx-muted);
+}
+
+.nyx-setup-text {
+  line-height: 1.4;
+}
+
+.nyx-setup-refresh {
+  align-self: flex-start;
+}
+
+/* ---- v0.27: batch queue run ---- */
+.nyx-queue-run {
+  border: none;
+  background: transparent;
+  color: var(--nyx-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+.nyx-queue-run:hover {
+  color: var(--vscode-foreground);
+}
+
+/* ---- v0.27: privacy report ---- */
+.nyx-privacy {
+  border: none;
+  background: transparent;
+  color: var(--nyx-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.nyx-privacy:hover {
+  color: var(--vscode-foreground);
+}
+
+.nyx-privacy-note {
+  margin-top: 6px;
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+
+/* ---- v0.27: benchmark setup recommendation ---- */
+.nyx-bench-advice:not(:empty) {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+}
+
+.nyx-bench-advice-body {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 6px 0 8px;
+  color: var(--nyx-muted);
+}
+
+/* ---- v0.27: native diff links ---- */
+.nyx-open-diff {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+}
+
+.nyx-review-diffbtn {
+  flex-shrink: 0;
+}

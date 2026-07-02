@@ -1,4 +1,4 @@
-import type { DiffSummary, DisplayItem, PlanItem, QuestionType } from '../src/types';
+import type { DiffSummary, DisplayItem, PlanItem, QuestionType, SetupStatus } from '../src/types';
 import { escapeHtml, messagesEl, planEl, scrollToBottom, speedEl } from './dom';
 import { renderMarkdown, renderMarkdownFinal } from './markdown';
 import { post, S } from './state';
@@ -33,14 +33,111 @@ const EXAMPLE_PROMPTS = [
   'Summarize https://example.com',
 ];
 
+/** Last first-run diagnosis from the host, rendered into the empty state. */
+let lastSetup: SetupStatus | undefined;
+
+/** Stores the host's setup diagnosis and refreshes the guided empty state. */
+export function onSetupStatus(status: SetupStatus): void {
+  lastSetup = status;
+  if (!hasTranscript()) {
+    renderEmptyState();
+  }
+}
+
+function setupRow(ok: boolean, text: string, action?: { label: string; onClick: () => void; disabled?: boolean }): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'nyx-setup-row';
+  const icon = document.createElement('span');
+  icon.textContent = ok ? '\u2713' : '\u25CB';
+  icon.className = ok ? 'nyx-setup-ok' : 'nyx-setup-todo';
+  const label = document.createElement('span');
+  label.className = 'nyx-setup-text';
+  label.textContent = text;
+  row.appendChild(icon);
+  row.appendChild(label);
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nyx-btn secondary';
+    btn.textContent = action.label;
+    btn.disabled = action.disabled === true;
+    btn.addEventListener('click', () => {
+      btn.disabled = true;
+      action.onClick();
+    });
+    row.appendChild(btn);
+  }
+  return row;
+}
+
+/** Guided first-run card: diagnoses the setup and offers one-click fixes. */
+function buildSetupCard(): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'nyx-setup';
+  const setup = lastSetup;
+  if (!setup) {
+    card.textContent = 'Checking your local setup…';
+    post({ type: 'diagnoseSetup' });
+    return card;
+  }
+  card.appendChild(
+    setupRow(
+      setup.ollamaReachable,
+      setup.ollamaReachable ? `Ollama is running (${setup.ollamaUrl})` : `Ollama is not reachable at ${setup.ollamaUrl} — start it (\`ollama serve\`) or add a machine via ⚙`,
+      setup.ollamaReachable ? undefined : { label: '\u21BB Check again', onClick: () => post({ type: 'diagnoseSetup' }) },
+    ),
+  );
+  card.appendChild(
+    setupRow(
+      setup.hasCoder,
+      setup.hasCoder
+        ? 'A coding model is available'
+        : setup.pulling
+          ? `Downloading ${setup.pulling}… (one-time, a few GB)`
+          : 'No coding model installed yet',
+      setup.hasCoder || !setup.ollamaReachable
+        ? undefined
+        : { label: setup.pulling ? 'Downloading…' : 'Pull qwen2.5-coder:7b', onClick: () => post({ type: 'setupAction', action: 'pullCoder' }), disabled: Boolean(setup.pulling) },
+    ),
+  );
+  if (setup.indexEnabled) {
+    card.appendChild(
+      setupRow(
+        setup.hasIndex,
+        setup.hasIndex ? 'Semantic code index is built' : 'Semantic code index not built yet',
+        setup.hasIndex || !setup.ollamaReachable
+          ? undefined
+          : { label: 'Build index', onClick: () => post({ type: 'setupAction', action: 'buildIndex' }) },
+      ),
+    );
+  }
+  const refresh = document.createElement('button');
+  refresh.type = 'button';
+  refresh.className = 'nyx-btn secondary nyx-setup-refresh';
+  refresh.textContent = '\u21BB Re-scan models';
+  refresh.addEventListener('click', () => {
+    post({ type: 'refreshModels' });
+    post({ type: 'diagnoseSetup' });
+  });
+  card.appendChild(refresh);
+  return card;
+}
+
 export function renderEmptyState(): void {
   messagesEl.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'nyx-empty';
 
   if (S.models.length === 0) {
-    wrap.innerHTML =
-      'No models yet.<br/>Start Ollama or LM Studio, then click <b>&#8635; Refresh</b> — or open <b>&#9881; Manage models</b> to add a machine on your network.';
+    const title = document.createElement('div');
+    title.className = 'nyx-empty-title';
+    title.textContent = 'Let’s get Nyx running';
+    const sub = document.createElement('div');
+    sub.className = 'nyx-empty-sub';
+    sub.textContent = 'Nyx runs entirely on your own hardware. Three quick checks:';
+    wrap.appendChild(title);
+    wrap.appendChild(sub);
+    wrap.appendChild(buildSetupCard());
     messagesEl.appendChild(wrap);
     return;
   }
@@ -74,6 +171,21 @@ export function renderEmptyState(): void {
     examples.appendChild(chip);
   }
   wrap.appendChild(examples);
+
+  // Models are there — still offer the semantic index when it hasn't been built.
+  if (lastSetup === undefined) {
+    post({ type: 'diagnoseSetup' });
+  } else if (lastSetup.indexEnabled && !lastSetup.hasIndex) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'nyx-example nyx-setup-index';
+    chip.textContent = '\u{1F9ED} Build the semantic code index (meaning-based search)';
+    chip.addEventListener('click', () => {
+      chip.disabled = true;
+      post({ type: 'setupAction', action: 'buildIndex' });
+    });
+    examples.appendChild(chip);
+  }
   messagesEl.appendChild(wrap);
 }
 
@@ -154,6 +266,8 @@ const TOOL_ICONS: Record<string, string> = {
   web_search: '\u{1F50D}',
   run_command: '\u2318',
   run_script: '\u{1F9EA}',
+  git_diff: '\u{1F500}',
+  git_log: '\u{1F4DC}',
   check_process: '\u23F1',
   kill_process: '\u23F9',
   browser_navigate: '\u{1F310}',
@@ -190,6 +304,8 @@ export const TOOL_VERBS: Record<string, string> = {
   web_search: 'Searched web',
   run_command: 'Ran',
   run_script: 'Ran script',
+  git_diff: 'Read git diff',
+  git_log: 'Read git log',
   check_process: 'Checked process',
   kill_process: 'Stopped process',
   browser_navigate: 'Browsed',
@@ -437,6 +553,16 @@ export function addApproval(id: string, name: string, args: string, diff?: DiffS
     const info = document.createElement('div');
     info.className = 'nyx-approval-stats';
     info.textContent = `${filePath ?? ''} ${badge}`.trim();
+    if (filePath) {
+      const openDiff = document.createElement('button');
+      openDiff.type = 'button';
+      openDiff.className = 'nyx-file-link nyx-open-diff';
+      openDiff.textContent = 'Open diff';
+      openDiff.title = 'Open the native diff view (session start ↔ current file)';
+      openDiff.addEventListener('click', () => post({ type: 'openDiff', path: filePath }));
+      info.appendChild(document.createTextNode(' '));
+      info.appendChild(openDiff);
+    }
     pre.before(info);
   }
 

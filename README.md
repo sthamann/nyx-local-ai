@@ -83,8 +83,17 @@ If you have serious local hardware and want an agent that treats it seriously, t
 ## Highlights
 
 - **Zero setup.** Detects local models on start. `ollama pull <model>` → it shows up in the picker.
+- **Guided first-run.** The empty state diagnoses your setup (Ollama reachable? coding model installed? index built?) and fixes each gap with one click — including a one-click `qwen2.5-coder:7b` pull.
+- **Git-aware agent.** Read-only `git_diff` / `git_log` tools answer "what did I just change?" without `run_command` approval friction.
+- **Inline quick edit.** Select code → `Cmd/Ctrl+Alt+K` → describe the change → review the diff → apply. No chat roundtrip; checkpoints and backups apply as usual.
+- **Batch queue (overnight mode).** ▶ Run all queued jobs sequentially — optionally verifying each with a command fix-until-green — and get a session report with the net diff at the end.
+- **Privacy report.** The 🛡 button lists every host the session contacted (your machines + explicitly fetched URLs), so the "no cloud calls" promise is checkable, not just claimed.
+- **Benchmark-based routing (opt-in).** With `nyx.benchmarkRouting`, the judgment-best benchmarked model plans and the edit-precision winner executes.
+- **Native diff view.** "Open diff" links in approval cards and the review view open the editor's real diff (session start ↔ current file).
+- **Active-file context.** The file you're editing (±30 lines around the cursor) rides along automatically — small enough for local context budgets, off via `nyx.includeActiveFile`.
+- **Chat handoff.** *Copy Chat as Markdown (Handoff)* puts the whole session on the clipboard — paste it into Cursor's agent, a PR, or an issue.
 - **MCP client.** Connects to the MCP servers from your `~/.cursor/mcp.json` / `.cursor/mcp.json` (stdio + HTTP) and offers their tools to the agent — e.g. `codebase-memory-mcp` for graph-based code memory. Governed by the same per-tool permissions (`mcp:<server>/<tool>`).
-- **Semantic codebase search.** A fully local embedding index (Ollama + `nomic-embed-text`, int8-quantized, structure-aware chunking, live file-watcher updates) powers the `semantic_search` tool: find code by meaning, not just by regex.
+- **Semantic codebase search.** A fully local embedding index (`nomic-embed-text`, int8-quantized, structure-aware chunking, live file-watcher updates) powers the `semantic_search` tool: find code by meaning, not just by regex. Works with Ollama **and** OpenAI-compatible hosts (LM Studio, llama.cpp, vLLM) via a `/v1/embeddings` fallback; coverage limits are configurable (`nyx.indexMaxFiles` / `nyx.indexMaxChunks`) and warn when hit.
 - **Tab autocomplete.** Inline ghost text from a local FIM model (`qwen2.5-coder:7b`) — the piece that used to require a second extension. Opt-in via the **Nyx Tab** status-bar toggle.
 - **Browser automation.** Headless driving of your installed Chrome/Edge: navigate, read pages as numbered interactive elements, click, type, and screenshot through the vision toolchain.
 - **Task plans.** The agent maintains a visible ○/▸/✓ plan card for multi-step tasks, persisted with the chat.
@@ -109,7 +118,7 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Vision & PDF toolchain.** Non-vision models can still "see": PDF text extraction, offline OCR, and a local vision model for image descriptions.
 - **tokens/sec** indicator for a feel of model performance.
 - **Clarifying questions.** The model can ask you single-choice, multiple-choice, or free-text questions.
-- **Project memory.** Key outcomes of past sessions are remembered per project and offered to new sessions (automatically and via tools).
+- **Project memory.** Key outcomes of past sessions are remembered per project and offered to new sessions (automatically and via tools). Sessions are distilled by the utility model, and `recall_memory` ranks matches with the local embedding index — with keyword search as the offline fallback.
 - **Auto-named chats.** After the first exchange, each chat gets a short model-generated title.
 - **Chat history & session tabs.** Every conversation is saved locally — an always-visible tab strip switches between recent chats instantly; the full history is searchable by title/model/machine with edit stats (+/− lines, files changed).
 - **Reasoning display.** Models that stream thinking (`reasoning_content`, `<think>`, …) show a collapsible *Thought for Ns* block above the answer.
@@ -215,6 +224,15 @@ Then **reload the window** (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*) a
 
 ## Features in depth
 
+### Guided first-run
+When no model is found, the empty state doesn't just point at the docs — it
+**diagnoses the setup** and offers one-click fixes: (1) is Ollama reachable at
+`nyx.ollamaUrl`? (2) is a coding model installed? If not, **Pull
+qwen2.5-coder:7b** downloads one straight from the panel (one-time, a few GB).
+(3) once models exist, it offers to **build the semantic index**. All checks
+re-run live as you fix things; the ↻ *Re-scan models* button re-probes
+everything.
+
 ### Model & machine manager
 Open it via the ⚙️ button in the sidebar.
 
@@ -264,7 +282,8 @@ that previously required a second extension (Twinny/Continue). Opt-in via
   `starcoder2`, `codegemma`.
 - Debounced (250 ms), cancellable, cached per position, capped at 12 lines,
   and suffix-aware (won't repeat what's already after the cursor).
-- Runs against `nyx.autocompleteOllamaUrl` (defaults to your main Ollama), so
+- Runs against the helper host (`nyx.helperOllamaUrl`, or the
+  `nyx.autocompleteOllamaUrl` override; defaults to your main Ollama), so
   chat can live on the DGX while autocomplete stays on a snappy local 7B.
 
 ```bash
@@ -293,6 +312,12 @@ behavior. Example (DeepSeek V4 Flash on a DGX Spark cluster): 80% tool calls,
 next to any model runs a compact 9-request version in-product and pins the
 scores as a chip (🔧 tools ✏ edits 🧠 judgment; hover for FP rate and latency).
 Results are stored, so you can compare machines side by side.
+
+**Setup recommendation:** after each benchmark, Nyx turns the stored scores
+into a concrete proposal — *"model X as daily driver, Y as utility model, Z
+for autocomplete"* — shown in the machine editor with an **Apply setup**
+button that sets all three at once (selection, `nyx.utilityModel`,
+`nyx.autocompleteModel`) instead of three manual settings.
 
 ### System prompt design
 Nyx's system prompt distills the battle-tested conventions from production
@@ -334,6 +359,8 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `http_request` | GET/POST/… against local APIs & dev servers | ask |
 | `wait` | Pause up to 30 s (dev-server boot etc.) | allow |
 | `get_diagnostics` | Linter/compiler errors & warnings | allow |
+| `git_diff` | Uncommitted git changes + short status (read-only) | allow |
+| `git_log` | Recent commit history (read-only) | allow |
 | `fetch_url` | Fetch text of an http(s) URL | allow |
 | `web_search` | Search the web (DuckDuckGo) | allow |
 | `recall_memory` | Search project memory of past sessions | allow |
@@ -356,6 +383,24 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `browser_screenshot` | Screenshot + vision description | allow |
 | `browser_close` | Close the headless browser | allow |
 | `mcp_<server>_<tool>` | Any tool from a connected MCP server | ask |
+
+### Git context tools
+"What did I just change?" shouldn't need a shell approval: `git_diff`
+(working tree vs. HEAD, optional `staged`/`path` filters, plus a short
+`git status`) and `git_log` (recent commits) are **read-only tools with
+allow-default** — the agent sees your uncommitted work instantly, while
+mutating git operations (`commit`, `push`, `reset`) still go through
+`run_command` with the usual approval.
+
+### Quick edit (inline, `Cmd/Ctrl+Alt+K`)
+Select code → **Nyx: Quick Edit Selection** (keybinding `Cmd/Ctrl+Alt+K`, or
+right-click → *Quick Edit Selection*) → type an instruction ("add error
+handling", "convert to async/await") → the active model rewrites exactly the
+selection. You review the **+/− diff in a native confirmation** before
+anything is applied; the edit then runs through the standard machinery —
+checkpoint, backup, `WorkspaceEdit`, shrink guard — so it shows up in the
+review view and is revertible like any agent edit. No chat roundtrip, no
+context ceremony.
 
 ### Autonomy presets & permissions
 One switch instead of a JSON file: the **autonomy selector** next to the mode
@@ -394,8 +439,10 @@ Works out of the box with servers like **codebase-memory-mcp** (graph-based code
 ### Semantic codebase search (local RAG)
 `semantic_search(query)` finds code by **meaning** — "where is authentication handled?" — even when no keyword matches. Fully local:
 - **Structure-aware chunking**: files are split at function/class/section boundaries (with merge/window handling for tiny and oversized units), so a chunk usually holds one coherent code unit — markedly better retrieval than fixed windows. Files without recognizable structure fall back to overlapping windows.
-- Chunks are embedded through a local Ollama model (`nyx.embeddingModel`, default `nomic-embed-text`, auto-pulled on first use); vectors are **int8-quantized** and persisted in workspace storage (a 2,500-file repo stays in the tens of MB).
+- Chunks are embedded through a local model (`nyx.embeddingModel`, default `nomic-embed-text`, auto-pulled on first use via Ollama); vectors are **int8-quantized** and persisted in workspace storage (a 2,500-file repo stays in the tens of MB).
+- **Works without Ollama too:** when the embedding host doesn't speak Ollama's `/api/embed`, Nyx falls back to the OpenAI-compatible **`/v1/embeddings`** endpoint — so LM Studio, llama.cpp server, and vLLM users get semantic search as well.
 - **Live incremental updates**: a file watcher re-embeds changed files in the background (debounced, hash-checked) once an index exists — searches always see fresh code. Build eagerly via *Nyx: Build/Update Semantic Index* or reset with *Nyx: Rebuild Semantic Index from Scratch*.
+- **Visible coverage limits:** indexing covers up to `nyx.indexMaxFiles` files / `nyx.indexMaxChunks` chunks (defaults 2,500 / 12,000). When a limit is hit, the status line says so explicitly — raise the settings to cover a bigger repo instead of silently searching half the codebase.
 - The agent is instructed to use `semantic_search` for conceptual questions and `search_files` (ripgrep) for exact strings.
 
 Disable with `nyx.semanticIndexEnabled`. For graph-aware retrieval (call paths, architecture queries), pair it with `codebase-memory-mcp` via MCP.
@@ -442,12 +489,27 @@ Text files are inlined (truncated if large), folders are listed, and media files
 
 The composer also keeps a **prompt history**: press ↑ (with the caret at the start or an empty input) to recall earlier prompts shell-style, ↓ to walk back to your draft.
 
+### Active-file auto-context
+The file you are editing rides along automatically: each message includes the
+**path plus ±30 lines around your cursor** of the last active editor — so
+"fix this" just works without attaching anything. Deliberately tiny (local
+models have tight context budgets), skipped when you already `@`-mentioned
+the file, and disabled entirely via `nyx.includeActiveFile`.
+
 ### Vision & PDF toolchain
 So even non-vision models can work with images and PDFs:
 - **PDF** → text via `unpdf`.
 - **Images** → offline **OCR** (`tesseract.js`) *and* a description from a local **vision model** (default `moondream`, auto-pulled via Ollama on first use).
 
-Configurable via `nyx.visionModel`, `nyx.visionOllamaUrl`, `nyx.autoInstallVisionModel`, `nyx.enableOcr`.
+Configurable via `nyx.visionModel`, `nyx.autoInstallVisionModel`, `nyx.enableOcr`.
+
+### Helper host (one setting for all helper models)
+Vision, embeddings, and autocomplete are "helper" workloads that usually live
+on one box. Instead of three URLs, set **`nyx.helperOllamaUrl`** once (empty =
+your main `nyx.ollamaUrl`) and all helpers use it. The legacy per-feature
+settings (`nyx.visionOllamaUrl`, `nyx.embeddingOllamaUrl`,
+`nyx.autocompleteOllamaUrl`) keep working as **explicit overrides** for
+existing setups — no breaking change, just one knob instead of three.
 
 ### tokens/sec
 While generating, a **tok/s** indicator shows a live estimate and then an accurate figure from the server's usage data (when provided).
@@ -463,16 +525,46 @@ While the agent is busy, pressing **Enter** queues your message instead of sendi
 - **Stop** cancels the current job and pauses the queue.
 - With the input empty, **Enter** starts the next queued job.
 
+### Batch runs & overnight queue
+Queue up N tasks, hit **▶ Run all** (or *Nyx: Run Queued Jobs (Batch)*), and
+walk away: the jobs run **sequentially in the extension host** — the panel
+doesn't need to stay visible — and when the queue drains, Nyx posts a
+**session report** into the chat: per-job status and duration, the **net
+diff** (files, +/− lines), and a pointer to the review view for per-file
+revert or one-click commit. A native notification fires when the batch ends.
+- Set `nyx.batchVerifyCommand` (e.g. `npm test`) and every job is **verified
+  fix-until-green** through the grind loop (capped by `nyx.grindMaxIterations`);
+  the report marks each job ✅ verified / ❌ verify failed.
+- Combine with 🚀 **Autopilot** autonomy — otherwise approval prompts pause the
+  run while you're away (Nyx warns about this at start).
+- The queue itself is persistent (it survives window reloads); a batch that is
+  interrupted mid-run keeps its remaining jobs queued.
+
 ### File-edit diff cards & approval previews
 `write_file` / `edit_file` first show the **proposed diff in the approval card** — you approve what you can see, then it is applied via `WorkspaceEdit` (open editors and undo history stay intact). Applied edits render as cards showing the path, a `+added −removed` badge, and a colored diff preview; click the filename to open the file.
 
+### Native diff view
+Approval cards and every file in the review view carry an **Open diff** link
+that opens the editor's real side-by-side diff — the **checkpoint original**
+(session start) on the left, the current disk state on the right, served
+through a virtual-document provider. Full syntax highlighting, word-level
+diffing, and familiar navigation instead of a text preview.
+
 ### Smart model routing
-Utility work shouldn't occupy your big model: chat titles and commit messages
-are automatically routed to the **smallest reachable ≤8B model** (e.g. a local
-`qwen2.5-coder:7b`) while the heavyweight on the DGX keeps thinking. Pin a
-specific model with `nyx.utilityModel` — when set explicitly, context
-compaction routes there too. Without a small model everything falls back to
-the active one.
+Utility work shouldn't occupy your big model: chat titles, commit messages,
+and the project-memory distillation are automatically routed to the
+**smallest reachable ≤8B model** (e.g. a local `qwen2.5-coder:7b`) while the
+heavyweight on the DGX keeps thinking. Pin a specific model with
+`nyx.utilityModel` — when set explicitly, context compaction routes there
+too. Without a small model everything falls back to the active one.
+
+**Benchmark-based multi-model routing (opt-in):** enable
+`nyx.benchmarkRouting` and Nyx uses your stored benchmark scores to split a
+run across machines — the **judgment-best** model handles the first
+plan/reasoning turn, the **edit-precision winner** executes the tool steps.
+Requires at least two benchmarked, reachable models; a status line shows the
+chosen route, and the machine-failover mechanism keeps applying per turn.
+No benchmarks, no magic — your selected model is used as-is.
 
 ### Grind mode — fix until green
 The killer economics of local inference: iteration costs nothing. Type
@@ -503,8 +595,8 @@ the status line reports the short hash.
 Each user message starts a checkpoint. Hovering a message reveals **↩ Edit & rerun**: Nyx restores every file the agent changed after that point, rewinds the conversation, and places the original message in the composer for editing. After an error, a **Retry** button does the same and re-sends automatically. Checkpoints are persisted with the chat.
 
 ### Project memory
-Per project, Nyx distills each session's **key outcomes** (goal, result, changed files) and stores them locally. New sessions automatically receive a compact digest, and the agent can:
-- `recall_memory(query?)` — search past work in detail,
+Per project, Nyx distills each session's **key outcomes** (goal, result, changed files) and stores them locally. The distillation is a real **utility-model call** (goal + outcome + gotchas in 2–4 sentences, routed to the small model) with the last assistant answer as offline fallback. New sessions automatically receive a compact digest, and the agent can:
+- `recall_memory(query?)` — search past work; matches are **ranked by the local embedding model** (same host as the semantic index), so "auth work" finds the "login flow refactor" — with keyword ranking as offline fallback,
 - `save_memory(title, summary)` — record a durable outcome.
 
 Browse, delete, or clear memories from the 🧠 view in the sidebar. Toggle with `nyx.memoryEnabled`; control the injected count with `nyx.memoryInject`.
@@ -516,6 +608,22 @@ For the full archive, open **History** (☰): chats grouped by date (*Today*, *Y
 
 ### Auto-named chats
 After the first exchange, Nyx asks the model for a short 3–6 word title and names the chat automatically (shown in the top bar and in History). Falls back to the first message if generation is unavailable. Toggle with `nyx.autoTitle`.
+
+### Chat export & handoff
+Two ways out of a session: *Nyx: Export Chat as Markdown* saves the full
+transcript (messages, collapsible tool cards, Q&A) as a `.md` file, and
+*Nyx: Copy Chat as Markdown (Handoff)* puts the same Markdown straight on the
+**clipboard** — paste Nyx's local groundwork into Cursor's cloud agent, a PR
+description, or an issue without touching the filesystem.
+
+### Privacy report (per-session network log)
+The 🛡 button next to the context meter opens the **network log of the current
+session**: every contacted host with its purpose (model inference,
+embeddings, vision/OCR, web search, URL fetches, model downloads) and request
+count. On a fully local setup you'll see nothing but your own machines —
+which is exactly the point: the "no cloud calls" promise becomes something
+you can *verify*, not just believe. The log lives in memory per session and
+is never persisted or transmitted.
 
 ### Local-model tool-call compatibility
 Many local models emit tool calls as text in the assistant content instead of the OpenAI `tool_calls` field. Nyx detects and converts these automatically:
@@ -545,21 +653,27 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.contextTokens` | `16384` | Assumed context window when a machine has none set |
 | `nyx.compactThreshold` | `0.75` | Fraction of context that triggers auto-compaction |
 | `nyx.visionModel` | `moondream` | Local vision model for image descriptions |
-| `nyx.visionOllamaUrl` | `http://localhost:11434` | Ollama host for the vision model |
+| `nyx.visionOllamaUrl` | `http://localhost:11434` | Override: Ollama host for the vision model (default = helper host) |
 | `nyx.autoInstallVisionModel` | `true` | Auto-download the vision model on first use |
 | `nyx.enableOcr` | `true` | Run offline OCR on images (in addition to the vision model) |
 | `nyx.autoTitle` | `true` | Auto-name chats after the first exchange |
 | `nyx.autoFetchUrls` | `true` | Fetch URLs in your message (text + described images) |
 | `nyx.memoryEnabled` | `true` | Remember key outcomes per project |
 | `nyx.memoryInject` | `5` | Recent memories injected into a new session |
+| `nyx.includeActiveFile` | `true` | Auto-include the active file (±30 lines around the cursor) as context |
 | `nyx.semanticIndexEnabled` | `true` | Local embedding index for `semantic_search` |
 | `nyx.embeddingModel` | `nomic-embed-text` | Embedding model (auto-pulled via Ollama) |
-| `nyx.embeddingOllamaUrl` | `http://localhost:11434` | Ollama host for embeddings |
+| `nyx.embeddingOllamaUrl` | `http://localhost:11434` | Override: host for embeddings (default = helper host) |
+| `nyx.indexMaxFiles` | `2500` | Max files in the semantic index (status warning when hit) |
+| `nyx.indexMaxChunks` | `12000` | Max chunks in the semantic index (status warning when hit) |
+| `nyx.helperOllamaUrl` | `""` | Shared host for helper workloads — vision, embeddings, autocomplete (empty = `nyx.ollamaUrl`) |
+| `nyx.batchVerifyCommand` | `""` | Command run after every batch-queue job, fix-until-green (empty = off) |
+| `nyx.benchmarkRouting` | `false` | Opt-in multi-model routing from benchmark scores (plan vs. edit turns) |
 | `nyx.mcpEnabled` | `true` | Connect to configured MCP servers |
 | `nyx.mcpServers` | `{}` | Extra MCP servers (same shape as Cursor's mcp.json) |
 | `nyx.autocompleteEnabled` | `false` | Tab autocomplete via a local FIM model (opt-in) |
 | `nyx.autocompleteModel` | `qwen2.5-coder:7b` | FIM-capable Ollama model for completions |
-| `nyx.autocompleteOllamaUrl` | `""` | Ollama host for autocomplete (empty = `nyx.ollamaUrl`) |
+| `nyx.autocompleteOllamaUrl` | `""` | Override: Ollama host for autocomplete (empty = helper host) |
 | `nyx.autocompleteMaxTokens` | `160` | Max tokens per inline completion |
 | `nyx.browserExecutable` | `""` | Chromium binary for browser tools (empty = auto-detect Chrome/Edge) |
 
@@ -698,6 +812,37 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 ### 33. Session tabs
 - Have 2+ chats → a tab strip appears under the title bar. Click a tab to switch instantly, `+` for a new chat, × (on hover) to delete, ⧉ in the title bar to hide/show the strip. While a job runs, switching is blocked with a hint instead of aborting the run.
 
+### 34. Guided first-run
+- Stop Ollama and open a fresh Nyx panel (or click ↻ with no server running) → the empty state shows the setup checklist: Ollama unreachable with a *Check again* button.
+- Start Ollama → *Check again* → the first row turns ✓; without a coder model, **Pull qwen2.5-coder:7b** downloads one with a single click; afterwards **Build index** offers the semantic index.
+
+### 35. Git context tools
+- In a repo with uncommitted changes, ask *"What did I just change?"* → the agent calls `git_diff` (no approval prompt) and summarizes your working-tree diff.
+- Ask *"Show the last 5 commits"* → `git_log` returns the one-line history.
+
+### 36. Quick edit (inline)
+- Select a function, press `Cmd/Ctrl+Alt+K`, type *"add a doc comment"* → a native confirmation shows the `+/−` diff; **Apply** writes the change (checkpointed & backed up). Check the ✎ review view — the file is listed and revertible.
+
+### 37. Batch queue with report
+- Queue 2–3 small tasks while the agent is idle, then press **▶ Run all** in the queue panel (or run *Nyx: Run Queued Jobs (Batch)*) with 🚀 Autopilot on → the jobs run back to back and a **Batch report** message appears at the end (per-job status, net diff), plus a native notification.
+- Set `"nyx.batchVerifyCommand": "node -e \"process.exit(0)\""` and rerun → each job is marked ✅ verified.
+
+### 38. Privacy report
+- After a few messages, click the 🛡 button next to the context meter → the popup lists the contacted hosts (your Ollama machine; duckduckgo.com only after a web search) with purpose and count. A fresh chat starts with an empty log.
+
+### 39. Native diff view
+- Let the agent edit a file, open the ✎ review view → **Open diff** opens the editor's side-by-side diff (session start ↔ now). The same link appears in edit approval cards.
+
+### 40. Active-file auto-context
+- Place your cursor inside a function and send *"What does this function do?"* without attaching anything → the answer references the file under the cursor. Set `"nyx.includeActiveFile": false` and it no longer does.
+
+### 41. Benchmark recommendation & routing
+- Benchmark two models (⚙ Manage models → Benchmark) → a **Recommended setup** card appears with an **Apply setup** button (daily driver, utility model, autocomplete).
+- Enable `"nyx.benchmarkRouting": true` and start an agent task → the status line reports which model plans and which one executes.
+
+### 42. Chat handoff
+- Run *Nyx: Copy Chat as Markdown (Handoff)* → paste into any editor: the full transcript (messages, tool summaries) lands as Markdown from the clipboard.
+
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.
 - **Panel disappeared:** run *Nyx: Show Panel* or click the status-bar **Nyx** entry; if that fails, run *Nyx: Reset Panel Location*.
@@ -715,6 +860,10 @@ telemetry**. The only outbound network calls are:
 - `run_command` / `run_script` (only what the agent runs, with your approval),
 - the one-time OCR language-data download (tesseract), and
 - downloading the vision model on first use (only if `nyx.autoInstallVisionModel` is on).
+
+The 🛡 **privacy report** in the sidebar lists every host the current session
+actually contacted (with purpose and count), so this list is verifiable at
+runtime.
 
 Hardening:
 - `fetch_url` refuses localhost / private-network addresses unless `nyx.allowPrivateNetworkFetch` is enabled (SSRF guard).
@@ -752,8 +901,11 @@ storage; project memory lives in the workspace state.
 | *Nyx: Toggle Tab Autocomplete* | Turn inline FIM completions on/off |
 | *Nyx: Check for Updates* | Query GitHub releases and offer a one-click update |
 | *Nyx: Export Chat as Markdown* | Save the current chat (incl. tool cards) as a .md file |
+| *Nyx: Copy Chat as Markdown (Handoff)* | Copy the whole chat to the clipboard for handoff |
+| *Nyx: Quick Edit Selection* | Inline-edit the selection with an instruction (`Cmd/Ctrl+Alt+K`) |
+| *Nyx: Run Queued Jobs (Batch)* | Run all queued jobs sequentially with a final report |
 
-Default keybindings: `Cmd/Ctrl+Alt+N` show panel · `Cmd/Ctrl+Alt+Shift+N` new chat · `Cmd/Ctrl+Alt+L` add selection.
+Default keybindings: `Cmd/Ctrl+Alt+N` show panel · `Cmd/Ctrl+Alt+Shift+N` new chat · `Cmd/Ctrl+Alt+L` add selection · `Cmd/Ctrl+Alt+K` quick edit.
 
 ---
 
@@ -775,6 +927,7 @@ src/
     SidebarProvider.ts    # webview host: runs, queue, checkpoints, approvals
     SessionStore.ts       # file-based chat persistence (one JSON per session)
     context.ts            # attachments, @-mentions, URL auto-fetch (vision-aware)
+    networkLog.ts         # per-session privacy report (contacted hosts)
     DropZoneProvider.ts   # no-Shift drop target
   agent/
     agent.ts              # tool-calling loop, retry/failover, compaction
@@ -787,6 +940,10 @@ src/
     client.ts             # OpenAI-compatible streaming + tool-call parsing/repair
     discovery.ts          # model discovery + capability probing (/api/show)
     machines.ts           # machine store (settings + SecretStorage keys)
+    hosts.ts              # helper-host resolution (vision/embeddings/autocomplete)
+  eval/
+    benchmark.ts          # in-product 9-request model benchmark
+    routing.ts            # benchmark-based setup advice + multi-model routing
   mcp/client.ts           # MCP client (stdio + streamable HTTP), Cursor mcp.json configs
   context/                # rules, skills, media (vision/PDF), web fetch/search
     semanticIndex.ts      # local embedding index (Ollama, int8, incremental)

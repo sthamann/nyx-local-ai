@@ -1,9 +1,13 @@
 import type { Memento } from 'vscode';
 import { stripSpecialTokens } from '../models/client';
+import { cosineSimilarity } from '../context/semanticIndex';
 import type { MemoryEntry } from '../types';
 
 const KEY = 'nyx.memories.v1';
 const MAX_ENTRIES = 80;
+
+/** Embeds texts to vectors; wired to the semantic index's embedding host. */
+export type MemoryEmbedder = (inputs: string[]) => Promise<number[][]>;
 
 function randomId(): string {
   return `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -40,8 +44,16 @@ function formatFull(entry: MemoryEntry): string {
  */
 export class MemoryStore {
   private migrated = false;
+  private embedder: MemoryEmbedder | undefined;
+  /** Entry-embedding cache, keyed by `${id}:${updatedAt}` so edits re-embed. */
+  private readonly vectors = new Map<string, number[]>();
 
   constructor(private readonly state: Memento) {}
+
+  /** Wires (or clears) the embedding backend used for semantic recall. */
+  setEmbedder(embedder: MemoryEmbedder | undefined): void {
+    this.embedder = embedder;
+  }
 
   all(): MemoryEntry[] {
     // Copy the entries: Memento returns its internal cached objects, and
@@ -107,7 +119,7 @@ export class MemoryStore {
     await this.state.update(KEY, []);
   }
 
-  /** Ranked search; empty query returns the most recent entries. */
+  /** Ranked keyword search; empty query returns the most recent entries. */
   search(query: string | undefined, limit: number, excludeSessionId?: string): MemoryEntry[] {
     let entries = this.all().filter((e) => !(excludeSessionId && e.sessionId === excludeSessionId));
     const q = (query ?? '').trim().toLowerCase();
@@ -124,9 +136,47 @@ export class MemoryStore {
     return entries.slice(0, Math.max(1, limit));
   }
 
-  /** Full-text block for the recall_memory tool. */
-  formatRecall(query: string | undefined, limit: number, excludeSessionId?: string): string {
-    const list = this.search(query, limit, excludeSessionId);
+  /**
+   * Semantic search over the memories via the local embedding model, so
+   * "recall auth work" matches "login flow refactor". Falls back to the
+   * keyword ranking when no embedder is wired or the host is offline.
+   */
+  async searchSemantic(query: string | undefined, limit: number, excludeSessionId?: string): Promise<MemoryEntry[]> {
+    const q = (query ?? '').trim();
+    if (!q || !this.embedder) {
+      return this.search(query, limit, excludeSessionId);
+    }
+    const entries = this.all().filter((e) => !(excludeSessionId && e.sessionId === excludeSessionId));
+    if (entries.length === 0) {
+      return [];
+    }
+    try {
+      if (this.vectors.size > 320) {
+        this.vectors.clear(); // stale keys from updated entries — cheap to rebuild
+      }
+      const missing = entries.filter((e) => !this.vectors.has(`${e.id}:${e.updatedAt}`));
+      if (missing.length > 0) {
+        const vectors = await this.embedder(
+          missing.map((e) => `search_document: ${e.title}\n${e.summary}\n${e.files.join(' ')}`),
+        );
+        missing.forEach((e, i) => this.vectors.set(`${e.id}:${e.updatedAt}`, vectors[i]));
+      }
+      const [queryVec] = await this.embedder([`search_query: ${q}`]);
+      return entries
+        .map((e) => ({ e, s: cosineSimilarity(queryVec, this.vectors.get(`${e.id}:${e.updatedAt}`) ?? []) }))
+        .filter((x) => x.s > 0.3)
+        .sort((a, b) => b.s - a.s || b.e.updatedAt - a.e.updatedAt)
+        .map((x) => x.e)
+        .slice(0, Math.max(1, limit));
+    } catch {
+      // Embedding host unavailable — keyword ranking still works offline.
+      return this.search(query, limit, excludeSessionId);
+    }
+  }
+
+  /** Full-text block for the recall_memory tool (embedding-ranked when available). */
+  async formatRecall(query: string | undefined, limit: number, excludeSessionId?: string): Promise<string> {
+    const list = await this.searchSemantic(query, limit, excludeSessionId);
     if (list.length === 0) {
       return query && query.trim() ? `No past work found matching "${query}".` : 'No memories stored yet.';
     }

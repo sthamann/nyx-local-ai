@@ -34,6 +34,7 @@ import {
   onAssistantEnd,
   onAssistantStart,
   onReasoning,
+  onSetupStatus,
   registerToolCall,
   renderEmptyState,
   renderPlan,
@@ -49,6 +50,7 @@ import {
   TOOL_VERBS,
 } from './transcript';
 import {
+  closePrivacyPopup,
   initComposer,
   onMentionResults,
   renderAttachments,
@@ -58,9 +60,10 @@ import {
   setComposerText,
   setMode,
   showContextDetail,
+  showNetworkLog,
 } from './composer';
 import { renderHistory, renderMemory, renderSessionTabs, updateChatTitle } from './history';
-import { isEditing, onBenchmarks, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
+import { isEditing, onBenchmarks, onBenchSetup, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
 import { initReview, renderReview, updateChangesChip } from './review';
 
 /** Capability badges shown next to the model name in the picker (#19). */
@@ -261,6 +264,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'cleared':
       renderTranscript([]);
+      closePrivacyPopup();
       speedEl.hidden = true;
       chatTitleEl.textContent = '';
       chatTitleEl.title = '';
@@ -280,6 +284,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
         setMode(message.mode);
       }
       renderTranscript(message.items);
+      closePrivacyPopup();
       showView('chat');
       return;
     case 'machines':
@@ -330,6 +335,15 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'contextDetail':
       showContextDetail(message.parts, message.total, message.budget);
+      return;
+    case 'setupStatus':
+      onSetupStatus(message.status);
+      return;
+    case 'networkLog':
+      showNetworkLog(message.entries);
+      return;
+    case 'benchSetup':
+      onBenchSetup(message.advice);
       return;
     default: {
       const exhaustive: never = message;

@@ -214,7 +214,19 @@ export type WebviewToHost =
   /** Runs the in-product benchmark against one model of a machine. */
   | { type: 'benchmarkModel'; machineId: string; modelId: string }
   /** Requests the context-usage breakdown for the popup. */
-  | { type: 'getContextDetail' };
+  | { type: 'getContextDetail' }
+  /** Empty state asks the host to diagnose the first-run setup. */
+  | { type: 'diagnoseSetup' }
+  /** One-click first-run actions (pull a coder model / build the index). */
+  | { type: 'setupAction'; action: 'pullCoder' | 'buildIndex' }
+  /** Starts the batch run over all queued jobs (overnight mode). */
+  | { type: 'queueRunAll' }
+  /** Opens the native diff view: checkpoint original vs. current disk state. */
+  | { type: 'openDiff'; path: string }
+  /** Requests the per-session network log (privacy report). */
+  | { type: 'getNetworkLog' }
+  /** Applies the post-benchmark setup recommendation. */
+  | { type: 'applyBenchSetup'; dailyKey?: string; utilityKey?: string; autocompleteModel?: string };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -259,7 +271,13 @@ export type HostToWebview =
   /** Stored benchmark scores per model key + optional just-finished/failed run. */
   | { type: 'benchmarks'; entries: Record<string, BenchmarkScores>; runningKey?: string; error?: string }
   /** Token breakdown for the context popup. */
-  | { type: 'contextDetail'; parts: Array<{ label: string; tokens: number }>; total: number; budget: number };
+  | { type: 'contextDetail'; parts: Array<{ label: string; tokens: number }>; total: number; budget: number }
+  /** First-run diagnosis for the guided empty state. */
+  | { type: 'setupStatus'; status: SetupStatus }
+  /** Hosts contacted during this session (privacy report). */
+  | { type: 'networkLog'; entries: NetworkLogEntry[] }
+  /** Setup recommendation computed from stored benchmark scores. */
+  | { type: 'benchSetup'; advice: BenchSetupAdvice };
 
 /** Scores of the in-product model benchmark (percentages; fp lower = better). */
 export interface BenchmarkScores {
@@ -279,4 +297,31 @@ export interface ReviewFile {
   /** File existed but was deleted. */
   deleted: boolean;
   diff: DiffSummary;
+}
+
+/** First-run diagnosis rendered in the empty state when no models are found. */
+export interface SetupStatus {
+  ollamaUrl: string;
+  ollamaReachable: boolean;
+  /** At least one coder-ish chat model is available. */
+  hasCoder: boolean;
+  /** A semantic index exists for this workspace. */
+  hasIndex: boolean;
+  indexEnabled: boolean;
+  /** Model id currently being pulled by the one-click install, if any. */
+  pulling?: string;
+}
+
+/** One contacted host in the per-session privacy report. */
+export interface NetworkLogEntry {
+  host: string;
+  purposes: string[];
+  count: number;
+}
+
+/** Post-benchmark setup recommendation with one-click apply. */
+export interface BenchSetupAdvice {
+  daily?: { key: string; label: string };
+  utility?: { key: string; label: string };
+  autocomplete?: { model: string; label: string };
 }

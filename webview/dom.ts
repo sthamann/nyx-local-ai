@@ -32,6 +32,7 @@ app.innerHTML = `
             <span class="nyx-queue-caret" id="nyx-queue-caret">&#9662;</span>
             <span id="nyx-queue-count">0 Queued</span>
           </button>
+          <button class="nyx-queue-run" id="nyx-queue-run" type="button" title="Run all queued jobs as a batch (with a report at the end)" aria-label="Run all queued jobs">&#9654; Run all</button>
           <button class="nyx-queue-clear" id="nyx-queue-clear" type="button" title="Clear queue" aria-label="Clear queue">&#128465;</button>
         </div>
         <div class="nyx-queue-list" id="nyx-queue-list"></div>
@@ -42,6 +43,7 @@ app.innerHTML = `
           <span class="nyx-context-label" id="nyx-context-label"></span>
         </button>
         <button class="nyx-changes" id="nyx-changes" type="button" hidden title="Review all file changes of this chat">&#9998; <span id="nyx-changes-count"></span></button>
+        <button class="nyx-privacy" id="nyx-privacy" type="button" title="Privacy report — every host contacted in this session" aria-label="Privacy report">&#128737;</button>
         <span class="nyx-speed" id="nyx-speed" hidden title="Generation speed (tokens per second)"></span>
       </div>
       <div class="nyx-attachments" id="nyx-attachments"></div>
@@ -131,6 +133,8 @@ export const queueToggle = el<HTMLButtonElement>('nyx-queue-toggle');
 export const queueCaret = el<HTMLElement>('nyx-queue-caret');
 export const queueCount = el<HTMLElement>('nyx-queue-count');
 export const queueClear = el<HTMLButtonElement>('nyx-queue-clear');
+export const queueRunBtn = el<HTMLButtonElement>('nyx-queue-run');
+export const privacyBtn = el<HTMLButtonElement>('nyx-privacy');
 export const queueList = el<HTMLDivElement>('nyx-queue-list');
 export const modeAgentBtn = el<HTMLButtonElement>('nyx-mode-agent');
 export const modeChatBtn = el<HTMLButtonElement>('nyx-mode-chat');

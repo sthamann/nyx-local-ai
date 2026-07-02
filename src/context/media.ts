@@ -150,7 +150,8 @@ async function ensureModel(host: string, model: string, autoInstall: boolean, on
   await pullModel(host, model, onStatus);
 }
 
-async function pullModel(host: string, model: string, onStatus?: (t: string) => void): Promise<void> {
+/** Streams an Ollama model pull, reporting progress (shared by vision + first-run). */
+export async function pullModel(host: string, model: string, onStatus?: (t: string) => void): Promise<void> {
   const res = await fetch(`${host}/api/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -189,5 +190,5 @@ async function pullModel(host: string, model: string, onStatus?: (t: string) => 
       }
     }
   }
-  onStatus?.(`Vision model ${model} ready.`);
+  onStatus?.(`Model ${model} ready.`);
 }

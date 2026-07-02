@@ -1,9 +1,10 @@
-import type { BenchmarkScores, Machine, MachineModelPref, MachineType } from '../src/types';
+import type { BenchmarkScores, BenchSetupAdvice, Machine, MachineModelPref, MachineType } from '../src/types';
 import { escapeHtml, mmBody } from './dom';
 import { post, S } from './state';
 
 let benchmarks: Record<string, BenchmarkScores> = {};
 let benchmarkRunning: string | undefined;
+let benchAdvice: BenchSetupAdvice | undefined;
 
 /** Stores incoming benchmark results and refreshes the editor's model rows. */
 export function onBenchmarks(entries: Record<string, BenchmarkScores>, runningKey?: string, error?: string): void {
@@ -16,6 +17,53 @@ export function onBenchmarks(entries: Record<string, BenchmarkScores>, runningKe
     }
   }
   renderModelRows();
+}
+
+/** Shows the post-benchmark setup recommendation with a one-click apply. */
+export function onBenchSetup(advice: BenchSetupAdvice): void {
+  benchAdvice = advice;
+  renderBenchAdvice();
+}
+
+function renderBenchAdvice(): void {
+  const container = document.getElementById('mmBenchAdvice');
+  if (!container) {
+    return;
+  }
+  container.innerHTML = '';
+  const advice = benchAdvice;
+  if (!advice || (!advice.daily && !advice.utility && !advice.autocomplete)) {
+    return;
+  }
+  const lines: string[] = [];
+  if (advice.daily) {
+    lines.push(`Daily driver: <b>${escapeHtml(advice.daily.label)}</b> (best overall score)`);
+  }
+  if (advice.utility) {
+    lines.push(`Utility model (titles, commits): <b>${escapeHtml(advice.utility.label)}</b> (fast &amp; small)`);
+  }
+  if (advice.autocomplete) {
+    lines.push(`Tab autocomplete: <b>${escapeHtml(advice.autocomplete.label)}</b>`);
+  }
+  container.innerHTML =
+    `<div class="nyx-field-label">Recommended setup (from your benchmarks)</div>` +
+    `<div class="nyx-bench-advice-body">${lines.join('<br/>')}</div>`;
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'nyx-btn';
+  apply.textContent = 'Apply setup';
+  apply.title = 'Sets the daily driver, nyx.utilityModel and nyx.autocompleteModel in one click';
+  apply.addEventListener('click', () => {
+    apply.disabled = true;
+    apply.textContent = 'Applied';
+    post({
+      type: 'applyBenchSetup',
+      dailyKey: benchAdvice?.daily?.key,
+      utilityKey: benchAdvice?.utility?.key,
+      autocompleteModel: benchAdvice?.autocomplete?.model,
+    });
+  });
+  container.appendChild(apply);
 }
 
 function scoreChip(scores: BenchmarkScores | undefined): string {
@@ -202,6 +250,7 @@ function renderEditor(): void {
         <span class="nyx-test-status" id="mmTestStatus"></span>
       </div>
       <div class="nyx-models" id="mmModels"></div>
+      <div class="nyx-bench-advice" id="mmBenchAdvice"></div>
       <div class="nyx-editor-actions">
         <button class="nyx-btn" id="mmSave" type="button">Save</button>
         <button class="nyx-btn secondary" id="mmCancel" type="button">Cancel</button>
@@ -209,6 +258,7 @@ function renderEditor(): void {
     </div>`;
 
   renderModelRows();
+  renderBenchAdvice();
   updateCtxHint();
 
   const ctxSel = document.getElementById('mmCtx') as HTMLSelectElement | null;

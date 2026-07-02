@@ -120,6 +120,21 @@
         "command": "nyx.exportChat",
         "title": "Export Chat as Markdown",
         "category": "Nyx"
+      },
+      {
+        "command": "nyx.copyChat",
+        "title": "Copy Chat as Markdown (Handoff)",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.quickEdit",
+        "title": "Quick Edit Selection",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.runQueue",
+        "title": "Run Queued Jobs (Batch)",
+        "category": "Nyx"
       }
     ],
     "keybindings": [
@@ -137,6 +152,12 @@
         "command": "nyx.attachSelection",
         "key": "ctrl+alt+l",
         "mac": "cmd+alt+l",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "nyx.quickEdit",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
         "when": "editorTextFocus"
       }
     ],
@@ -173,6 +194,11 @@
       "editor/context": [
         {
           "command": "nyx.attachSelection",
+          "when": "editorHasSelection",
+          "group": "9_nyx"
+        },
+        {
+          "command": "nyx.quickEdit",
           "when": "editorHasSelection",
           "group": "9_nyx"
         }
@@ -332,7 +358,12 @@
         "nyx.autocompleteOllamaUrl": {
           "type": "string",
           "default": "",
-          "description": "Ollama host for autocomplete. Empty = use nyx.ollamaUrl."
+          "description": "Override: Ollama host for autocomplete only. Empty = use nyx.helperOllamaUrl / nyx.ollamaUrl."
+        },
+        "nyx.helperOllamaUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Shared host for helper workloads (vision, embeddings, autocomplete). Empty = use nyx.ollamaUrl. The per-feature URL settings override this when set explicitly."
         },
         "nyx.autocompleteMaxTokens": {
           "type": "number",
@@ -352,7 +383,17 @@
         "nyx.embeddingOllamaUrl": {
           "type": "string",
           "default": "http://localhost:11434",
-          "description": "Ollama host that serves the embedding model."
+          "description": "Override: host that serves the embedding model (Ollama /api/embed or OpenAI-compatible /v1/embeddings). When left at the default, nyx.helperOllamaUrl / nyx.ollamaUrl is used."
+        },
+        "nyx.indexMaxFiles": {
+          "type": "number",
+          "default": 2500,
+          "description": "Maximum number of files the semantic index covers. A status warning appears when the limit is hit."
+        },
+        "nyx.indexMaxChunks": {
+          "type": "number",
+          "default": 12000,
+          "description": "Maximum number of embedded chunks kept in the semantic index. A status warning appears when the limit is hit."
         },
         "nyx.mcpEnabled": {
           "type": "boolean",
@@ -380,7 +421,22 @@
         "nyx.grindMaxIterations": {
           "type": "number",
           "default": 8,
-          "description": "Max fix-and-retest iterations for the /grind fix-until-green loop."
+          "description": "Max fix-and-retest iterations for the /grind fix-until-green loop (also caps batch verification)."
+        },
+        "nyx.batchVerifyCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command run after every job of a batch queue run (e.g. \"npm test\"); failures are fed back fix-until-green. Empty = no verification."
+        },
+        "nyx.benchmarkRouting": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt-in multi-model routing based on stored benchmark scores: the judgment-best model handles the plan/reasoning turn, the edit-precision winner executes. Needs at least two benchmarked models."
+        },
+        "nyx.includeActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically include the active editor file (path + ±30 lines around the cursor) as lightweight context with each message."
         },
         "nyx.systemPromptAppend": {
           "type": "string",
@@ -417,7 +473,7 @@
         "nyx.visionOllamaUrl": {
           "type": "string",
           "default": "http://localhost:11434",
-          "description": "Ollama host that runs (and, if needed, downloads) the vision model."
+          "description": "Override: Ollama host that runs (and, if needed, downloads) the vision model. When left at the default, nyx.helperOllamaUrl / nyx.ollamaUrl is used."
         },
         "nyx.autoInstallVisionModel": {
           "type": "boolean",

@@ -15,6 +15,7 @@ import type { Autonomy } from '../agent/permissions';
 import { buildRulesSection, loadRules } from '../context/rules';
 import { buildSkillsSection, loadSkills } from '../context/skills';
 import type { SkillMeta } from '../context/skills';
+import { executeTool } from '../agent/tools';
 import type { ToolContext, ToolProfile } from '../agent/tools';
 import { buildAttachmentContext, buildMentionContext, buildUrlContext } from './context';
 import { summarizeDiff } from '../agent/diff';
@@ -22,12 +23,30 @@ import { SessionStore } from './SessionStore';
 import type { StoredSession } from './SessionStore';
 import { loadMcpConfigs, McpManager } from '../mcp/client';
 import { BrowserManager, cleanupBrowserShots } from '../agent/browser';
-import { INCLUDE_GLOB, SemanticIndex } from '../context/semanticIndex';
+import { embedTexts, INCLUDE_GLOB, SemanticIndex } from '../context/semanticIndex';
 import type { SemanticOptions } from '../context/semanticIndex';
+import { resolveHelperUrl } from '../models/hosts';
+import { extractUrls } from '../context/web';
+import { mediaKind, pullModel } from '../context/media';
 import type { MediaOptions } from '../context/media';
-import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, PlanItem, QuestionType, ReviewFile, WebviewToHost } from '../types';
+import { NetworkLog } from './networkLog';
+import { computeBenchAdvice, routeByBenchmarks } from '../eval/routing';
+import type {
+  AttachmentMeta,
+  ChatMode,
+  DiffSummary,
+  DisplayItem,
+  HostToWebview,
+  ModelInfo,
+  PlanItem,
+  QuestionType,
+  ReviewFile,
+  WebviewToHost,
+} from '../types';
 
 const QUEUE_KEY = 'nyx.queue.v1';
+/** URI scheme of the virtual documents serving checkpoint originals for vscode.diff. */
+const ORIGINAL_SCHEME = 'nyx-original';
 
 interface ApprovalDecision {
   approved: boolean;
@@ -76,6 +95,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private currentPlan: PlanItem[] = [];
   /** Active fix-until-green loop (started via "/grind <command>"). */
   private grind: { command: string; iteration: number; max: number } | undefined;
+  /** Active batch run over the job queue (overnight mode) with per-job stats. */
+  private batch:
+    | {
+        startedAt: number;
+        verify: string;
+        jobs: Array<{ text: string; startedAt: number; endedAt?: number; ok?: boolean; addedBefore: number; removedBefore: number }>;
+      }
+    | undefined;
+  /** Per-session network log for the privacy report. */
+  private readonly networkLog = new NetworkLog();
+  /** Last file-backed editor, for the active-file auto-context (the webview steals focus). */
+  private lastEditor: vscode.TextEditor | undefined;
+  /** Model id currently downloading via the first-run one-click pull. */
+  private pullingModel: string | undefined;
+  /** Dedupe guard so the memory distillation runs once per new session state. */
+  private lastMemoryCapture: string | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.memory = new MemoryStore(context.workspaceState);
@@ -91,6 +126,41 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
     void cleanupBrowserShots();
     this.watchForIndexUpdates();
+    // Memory recall rides on the same local embedding host as the code index;
+    // the store falls back to keyword ranking when the host is unavailable.
+    this.memory.setEmbedder(async (inputs) => {
+      const opts = this.semanticOptions();
+      if (!opts) {
+        throw new Error('semantic indexing is disabled');
+      }
+      return embedTexts(opts, inputs);
+    });
+    this.lastEditor = vscode.window.activeTextEditor?.document.uri.scheme === 'file' ? vscode.window.activeTextEditor : undefined;
+    context.subscriptions.push(
+      vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (editor && editor.document.uri.scheme === 'file') {
+          this.lastEditor = editor;
+        }
+      }),
+      // Serves checkpoint originals as virtual documents for the native diff view.
+      vscode.workspace.registerTextDocumentContentProvider(ORIGINAL_SCHEME, {
+        provideTextDocumentContent: async (uri) => {
+          const key = decodeURIComponent(uri.query);
+          const originals = this.checkpoints.originals();
+          if (originals.has(key)) {
+            return originals.get(key) ?? '';
+          }
+          // No snapshot recorded (yet) — mirror the disk state so the diff is empty.
+          const root = this.workspaceRoot();
+          const fileUri = key.startsWith('/') || !root ? vscode.Uri.file(key) : vscode.Uri.joinPath(root, key);
+          try {
+            return new TextDecoder().decode(await vscode.workspace.fs.readFile(fileUri));
+          } catch {
+            return '';
+          }
+        },
+      }),
+    );
   }
 
   dispose(): void {
@@ -148,9 +218,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return undefined;
     }
     return {
-      embeddingUrl: cfg.get<string>('embeddingOllamaUrl') || 'http://localhost:11434',
+      embeddingUrl: resolveHelperUrl('embeddingOllamaUrl'),
       embeddingModel: cfg.get<string>('embeddingModel') || 'nomic-embed-text',
       autoInstall: cfg.get<boolean>('autoInstallVisionModel') ?? true,
+      maxFiles: cfg.get<number>('indexMaxFiles') ?? 2500,
+      maxChunks: cfg.get<number>('indexMaxChunks') ?? 12000,
       onStatus: (t) => this.post({ type: 'status', text: t }),
     };
   }
@@ -162,6 +234,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       void vscode.window.showInformationMessage('Nyx: semantic indexing is disabled or no workspace is open.');
       return;
     }
+    this.networkLog.record(opts.embeddingUrl, 'embeddings');
     try {
       const summary = await this.semanticIndex.ensureIndex(opts, force);
       this.post({ type: 'status', text: summary });
@@ -255,6 +328,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.currentMode = undefined;
     this.lastUserText = undefined;
     this.grind = undefined;
+    this.batch = undefined;
+    this.networkLog.clear();
+    this.lastMemoryCapture = undefined;
     this.currentPlan = [];
     this.post({ type: 'plan', items: [] });
     this.setQueue([]);
@@ -380,6 +456,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'cancel':
         this.stopRequested = true;
         this.grind = undefined;
+        this.batch = undefined;
         this.cancelRun();
         return;
       case 'toolDecision': {
@@ -487,6 +564,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         });
         return;
       }
+      case 'diagnoseSetup':
+        await this.postSetupStatus();
+        return;
+      case 'setupAction':
+        await this.runSetupAction(message.action);
+        return;
+      case 'queueRunAll':
+        await this.startBatchRun();
+        return;
+      case 'openDiff':
+        await this.openNativeDiff(message.path);
+        return;
+      case 'getNetworkLog':
+        this.postNetworkLog();
+        return;
+      case 'applyBenchSetup':
+        await this.applyBenchSetup(message.dailyKey, message.utilityKey, message.autocompleteModel);
+        return;
       default: {
         const exhaustive: never = message;
         void exhaustive;
@@ -535,13 +630,113 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (this.busy || this.stopRequested) {
       return;
     }
+    this.closeBatchJob();
     const queue = this.getQueue();
     if (queue.length === 0) {
+      await this.finishBatchIfDone();
       return;
     }
     const [next, ...rest] = queue;
     this.setQueue(rest);
+    if (this.batch) {
+      this.batch.jobs.push({ text: next, startedAt: Date.now(), addedBefore: this.addedLines, removedBefore: this.removedLines });
+      if (this.batch.verify) {
+        // The grind loop verifies the command after this job's agent turn and
+        // feeds failures back until it passes (or the iteration cap is hit).
+        const max = Math.max(1, vscode.workspace.getConfiguration('nyx').get<number>('grindMaxIterations') ?? 8);
+        this.grind = { command: this.batch.verify, iteration: 0, max };
+      }
+    }
     await this.onSend(next, this.currentModelKey ?? this.selectedKey ?? '', this.currentMode ?? 'agent');
+  }
+
+  // ---- Batch runs over the queue (overnight mode with a morning report) ----
+
+  /** Marks the most recent batch job as finished (verify outcome via `ok`). */
+  private closeBatchJob(ok?: boolean): void {
+    const job = this.batch?.jobs[this.batch.jobs.length - 1];
+    if (job && job.endedAt === undefined) {
+      job.endedAt = Date.now();
+      if (ok !== undefined) {
+        job.ok = ok;
+      }
+    } else if (job && ok !== undefined && job.ok === undefined) {
+      job.ok = ok;
+    }
+  }
+
+  /** Kicks off a batch run over all queued jobs (webview button or command). */
+  async startBatchRun(): Promise<void> {
+    if (this.busy) {
+      this.post({ type: 'status', text: 'Batch: a job is already running — it will continue through the queue.' });
+      return;
+    }
+    const queue = this.getQueue();
+    if (queue.length === 0) {
+      this.post({ type: 'status', text: 'Batch: the queue is empty — add jobs first.' });
+      return;
+    }
+    const verify = (vscode.workspace.getConfiguration('nyx').get<string>('batchVerifyCommand') ?? '').trim();
+    if (this.autonomy() !== 'autopilot') {
+      this.post({
+        type: 'status',
+        text: 'Batch: autonomy is not 🚀 Autopilot — approval prompts will pause the run while you are away.',
+      });
+    }
+    this.stopRequested = false;
+    this.batch = { startedAt: Date.now(), verify, jobs: [] };
+    this.post({
+      type: 'status',
+      text: `Batch: running ${queue.length} queued job(s)${verify ? ` — each verified with \`${verify}\`` : ''}…`,
+    });
+    await this.drainQueue();
+  }
+
+  /** When the queue is drained, turns the collected stats into a session report. */
+  private async finishBatchIfDone(): Promise<void> {
+    const batch = this.batch;
+    if (!batch || this.busy) {
+      return;
+    }
+    this.batch = undefined;
+    if (batch.jobs.length === 0) {
+      return;
+    }
+    const files = await this.collectReview();
+    const netAdded = files.reduce((n, f) => n + f.diff.added, 0);
+    const netRemoved = files.reduce((n, f) => n + f.diff.removed, 0);
+    const minutes = Math.max(1, Math.round((Date.now() - batch.startedAt) / 60000));
+    const jobLines = batch.jobs.map((job, i) => {
+      const mins = Math.max(1, Math.round(((job.endedAt ?? Date.now()) - job.startedAt) / 60000));
+      const verdict = job.ok === true ? '✅ verified' : job.ok === false ? '❌ verify failed' : '✔ done';
+      return `${i + 1}. ${verdict} · ${mins} min — ${job.text.split('\n')[0].slice(0, 120)}`;
+    });
+    const fileLines = files.slice(0, 30).map((f) => `- \`${f.path}\` ${f.deleted ? '(deleted)' : `+${f.diff.added} −${f.diff.removed}`}${f.created ? ' (new)' : ''}`);
+    const report = [
+      `## Batch report — ${batch.jobs.length} job(s) in ~${minutes} min`,
+      '',
+      ...jobLines,
+      '',
+      `**Net diff:** ${files.length} file(s), +${netAdded} −${netRemoved}${batch.verify ? ` · verify command: \`${batch.verify}\`` : ''}`,
+      ...(fileLines.length > 0 ? ['', ...fileLines] : []),
+      '',
+      'Open **✎ changed** to review or revert individual files, or **Commit** to ship the changes.',
+    ].join('\n');
+    this.currentDisplay.push({ kind: 'assistant', text: report });
+    this.post({ type: 'assistantStart' });
+    this.post({ type: 'assistantDelta', text: report });
+    this.post({ type: 'assistantEnd' });
+    await this.persistCurrent();
+    await this.postReview();
+    this.postSessions();
+    const passed = batch.jobs.filter((j) => j.ok !== false).length;
+    const note = await vscode.window.showInformationMessage(
+      `Nyx batch finished: ${passed}/${batch.jobs.length} job(s) completed, net diff +${netAdded} −${netRemoved}.`,
+      'Open Nyx',
+    );
+    if (note === 'Open Nyx') {
+      await vscode.commands.executeCommand('nyx.chatView.focus');
+    }
   }
 
   private findModel(key: string | undefined): ModelInfo | undefined {
@@ -606,6 +801,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.selectedKey = model.key;
+    this.networkLog.record(model.endpoint, 'model inference');
     this.ensureSession();
     this.currentModelKey = model.key;
     this.currentModelId = model.id;
@@ -634,14 +830,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const media = this.mediaOptions();
     const semanticOpts = this.semanticOptions();
 
+    if (this.attachments.some((a) => a.kind === 'file' && mediaKind(a.name))) {
+      this.networkLog.record(media.visionUrl, 'vision/OCR');
+    }
     const attachmentCtx = await buildAttachmentContext(this.attachments, media, supportsVision);
     this.attachments = [];
     this.postAttachments();
     const mentionCtx = await buildMentionContext(text, this.workspaceRoots());
-    const urlCtx = (cfg.get<boolean>('autoFetchUrls') ?? true)
+    const autoFetch = cfg.get<boolean>('autoFetchUrls') ?? true;
+    if (autoFetch) {
+      for (const url of extractUrls(text).slice(0, 3)) {
+        this.networkLog.record(url, 'user URL auto-fetch');
+      }
+    }
+    const urlCtx = autoFetch
       ? await buildUrlContext(text, media, supportsVision, (t) => this.post({ type: 'status', text: t }))
       : { text: '', images: [] };
-    const extra = [attachmentCtx.text, mentionCtx, urlCtx.text].filter(Boolean).join('\n\n---\n\n');
+    const activeFileCtx = (cfg.get<boolean>('includeActiveFile') ?? true) ? this.buildActiveFileContext(text) : '';
+    const extra = [attachmentCtx.text, mentionCtx, urlCtx.text, activeFileCtx].filter(Boolean).join('\n\n---\n\n');
     const finalText = extra ? `${extra}\n\n---\n\n${text}` : text;
     const images = [...attachmentCtx.images, ...urlCtx.images];
 
@@ -689,7 +895,29 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     let assistantBuf = '';
     let aborted = false;
     const pending = new Map<string, { name: string; args: string }>();
-    const fallbackModels = this.models.filter((m) => m.id === model.id && m.key !== model.key);
+
+    // Benchmark-based routing (opt-in): judgment-best model plans, edit-best executes.
+    let planModel = model;
+    let executionModel: ModelInfo | undefined;
+    if (mode === 'agent' && (cfg.get<boolean>('benchmarkRouting') ?? false)) {
+      const route = routeByBenchmarks(this.models, this.getBenchmarks(), model);
+      planModel = route.plan;
+      executionModel = route.execution;
+      if (planModel.key !== model.key || executionModel) {
+        this.networkLog.record(planModel.endpoint, 'model inference');
+        if (executionModel) {
+          this.networkLog.record(executionModel.endpoint, 'model inference');
+        }
+        this.post({
+          type: 'status',
+          text: `Benchmark routing: plan/reasoning on ${planModel.label}${executionModel ? `, edits on ${executionModel.label}` : ''}.`,
+        });
+      }
+    }
+    const fallbackModels = this.models.filter((m) => m.id === planModel.id && m.key !== planModel.key);
+    const executionFallbacks = executionModel
+      ? this.models.filter((m) => m.id === executionModel!.id && m.key !== executionModel!.key)
+      : undefined;
 
     // Show the context/token gauge right away so usage is visible during the run.
     this.post({ type: 'context', usedTokens: this.session.estimateTokens(), budgetTokens: budget });
@@ -698,8 +926,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       await this.session.run(
         finalText,
         {
-          model,
+          model: planModel,
           fallbackModels,
+          executionModel,
+          executionFallbacks,
           mode,
           ctx,
           systemAddon,
@@ -742,6 +972,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           onToolCall: (id, name, args) => {
             pending.set(id, { name, args });
             activeToolId = id;
+            this.networkLog.recordToolCall(name, args, this.semanticOptions()?.embeddingUrl);
             this.post({ type: 'toolCall', id, name, args });
           },
           onToolResult: (id, ok, content, outcome) => {
@@ -809,12 +1040,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const result = await this.processes.run(grind.command, { cwd: this.workspaceRoot()?.fsPath, timeoutMs: 300000 });
     if (result.ok) {
       this.grind = undefined;
+      this.closeBatchJob(true);
       this.post({ type: 'status', text: `Grind: \`${grind.command}\` passes after ${grind.iteration} iteration(s) ✅` });
       void this.drainQueue();
       return;
     }
     if (grind.iteration >= grind.max) {
       this.grind = undefined;
+      this.closeBatchJob(false);
       this.post({
         type: 'error',
         text: `Grind stopped: \`${grind.command}\` still fails after ${grind.max} iterations. Last output:\n${result.output.trim().slice(-800)}`,
@@ -1008,13 +1241,100 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         type: 'status',
         text: `Benchmark ${model.label}: tools ${scores.tool}% · edits ${scores.edit}% · judgment ${scores.judge}% · FP ${scores.fp}% · ${scores.avgMs} ms/req`,
       });
+      const advice = computeBenchAdvice(this.models, this.getBenchmarks());
+      if (advice) {
+        this.post({ type: 'benchSetup', advice });
+      }
     } catch (e) {
       this.postBenchmarks(undefined, e instanceof Error ? e.message : String(e));
     }
   }
 
+  /** One-click apply of the benchmark recommendation (three settings at once). */
+  private async applyBenchSetup(dailyKey?: string, utilityKey?: string, autocompleteModel?: string): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('nyx');
+    const applied: string[] = [];
+    if (dailyKey) {
+      const model = this.findModel(dailyKey);
+      if (model) {
+        this.selectedKey = model.key;
+        this.post({ type: 'models', models: this.models, selectedKey: this.selectedKey });
+        applied.push(`daily driver → ${model.label}`);
+      }
+    }
+    if (utilityKey) {
+      await cfg.update('utilityModel', utilityKey, vscode.ConfigurationTarget.Global);
+      applied.push(`utility model → ${utilityKey}`);
+    }
+    if (autocompleteModel) {
+      await cfg.update('autocompleteModel', autocompleteModel, vscode.ConfigurationTarget.Global);
+      applied.push(`autocomplete → ${autocompleteModel}`);
+    }
+    this.post({ type: 'status', text: applied.length > 0 ? `Setup applied: ${applied.join(' · ')}.` : 'Nothing to apply.' });
+  }
+
+  // ---- Guided first-run (empty-state diagnosis + one-click actions) ----
+
+  /** Diagnoses the local setup for the guided empty state. */
+  private async postSetupStatus(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('nyx');
+    const ollamaUrl = (cfg.get<string>('ollamaUrl') || 'http://localhost:11434').replace(/\/+$/, '');
+    const ollamaReachable = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2500) })
+      .then((r) => r.ok)
+      .catch(() => false);
+    const hasCoder = this.models.some((m) => /coder|code|deepseek|devstral/i.test(m.id));
+    const indexEnabled = (cfg.get<boolean>('semanticIndexEnabled') ?? true) && Boolean(this.workspaceRoot());
+    const hasIndex = indexEnabled ? await this.semanticIndex.hasIndex() : false;
+    this.post({
+      type: 'setupStatus',
+      status: { ollamaUrl, ollamaReachable, hasCoder, hasIndex, indexEnabled, pulling: this.pullingModel },
+    });
+  }
+
+  /** Executes a one-click first-run action from the empty state. */
+  private async runSetupAction(action: 'pullCoder' | 'buildIndex'): Promise<void> {
+    switch (action) {
+      case 'buildIndex':
+        await this.buildSemanticIndex(false);
+        await this.postSetupStatus();
+        return;
+      case 'pullCoder': {
+        if (this.pullingModel) {
+          return;
+        }
+        const model = 'qwen2.5-coder:7b';
+        const ollamaUrl = (vscode.workspace.getConfiguration('nyx').get<string>('ollamaUrl') || 'http://localhost:11434').replace(/\/+$/, '');
+        this.pullingModel = model;
+        await this.postSetupStatus();
+        this.post({ type: 'status', text: `Downloading ${model} via Ollama — a one-time download of a few GB…` });
+        this.networkLog.record(ollamaUrl, 'model download');
+        try {
+          await pullModel(ollamaUrl, model, (t) => this.post({ type: 'status', text: t }));
+          await this.refreshModels();
+        } catch (e) {
+          this.post({
+            type: 'error',
+            text: `Could not pull ${model}: ${e instanceof Error ? e.message : String(e)}. Run "ollama pull ${model}" in a terminal instead.`,
+          });
+        } finally {
+          this.pullingModel = undefined;
+          await this.postSetupStatus();
+        }
+        return;
+      }
+      default: {
+        const exhaustive: never = action;
+        void exhaustive;
+      }
+    }
+  }
+
+  private postNetworkLog(): void {
+    this.post({ type: 'networkLog', entries: this.networkLog.entries() });
+  }
+
   /** Builds the net session diff: checkpoint originals vs. current disk state. */
-  private async postReview(): Promise<void> {
+  private async collectReview(): Promise<ReviewFile[]> {
     const root = this.workspaceRoot();
     const files: ReviewFile[] = [];
     for (const [relPath, original] of this.checkpoints.originals()) {
@@ -1036,7 +1356,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       });
     }
     files.sort((a, b) => a.path.localeCompare(b.path));
-    this.post({ type: 'review', files });
+    return files;
+  }
+
+  private async postReview(): Promise<void> {
+    this.post({ type: 'review', files: await this.collectReview() });
+  }
+
+  /** Opens the editor's native diff: checkpoint original vs. current disk state. */
+  private async openNativeDiff(relPath: string): Promise<void> {
+    const root = this.workspaceRoot();
+    const fileUri = relPath.startsWith('/') || !root ? vscode.Uri.file(relPath) : vscode.Uri.joinPath(root, relPath);
+    const originalUri = vscode.Uri.from({ scheme: ORIGINAL_SCHEME, path: `/${relPath}`, query: encodeURIComponent(relPath) });
+    try {
+      await vscode.commands.executeCommand('vscode.diff', originalUri, fileUri, `${relPath} (session start ↔ now)`);
+    } catch (e) {
+      this.post({ type: 'error', text: `Could not open diff for ${relPath}: ${e instanceof Error ? e.message : String(e)}` });
+    }
   }
 
   private recomputeEditStats(): void {
@@ -1158,6 +1494,38 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /**
+   * Lightweight auto-context: path + ±30 lines around the cursor of the last
+   * active editor. Deliberately small (local models have tight context
+   * budgets) and skipped when the file is already @-mentioned.
+   */
+  private buildActiveFileContext(text: string): string {
+    const editor = this.lastEditor;
+    if (!editor) {
+      return '';
+    }
+    try {
+      const doc = editor.document;
+      if (doc.isClosed || doc.uri.scheme !== 'file') {
+        return '';
+      }
+      const rel = vscode.workspace.asRelativePath(doc.uri);
+      if (text.includes(`@${rel}`)) {
+        return '';
+      }
+      const line = editor.selection.active.line;
+      const start = Math.max(0, line - 30);
+      const end = Math.min(doc.lineCount - 1, line + 30);
+      const snippet = doc.getText(new vscode.Range(start, 0, end, doc.lineAt(end).text.length)).slice(0, 6000);
+      if (!snippet.trim()) {
+        return '';
+      }
+      return `Currently open editor file (auto-context; lines ${start + 1}-${end + 1} around the user's cursor): ${rel}\n\`\`\`\n${snippet}\n\`\`\``;
+    } catch {
+      return '';
+    }
+  }
+
   private workspaceRoot(): vscode.Uri | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri;
   }
@@ -1207,7 +1575,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private mediaOptions(): MediaOptions {
     const cfg = vscode.workspace.getConfiguration('nyx');
     return {
-      visionUrl: cfg.get<string>('visionOllamaUrl') || 'http://localhost:11434',
+      visionUrl: resolveHelperUrl('visionOllamaUrl'),
       visionModel: cfg.get<string>('visionModel') ?? 'moondream',
       autoInstall: cfg.get<boolean>('autoInstallVisionModel') ?? true,
       enableOcr: cfg.get<boolean>('enableOcr') ?? true,
@@ -1274,11 +1642,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.captureMemory(title);
   }
 
-  /** Exports the current chat as a readable Markdown file. */
-  async exportCurrentSession(): Promise<void> {
+  /** Renders the current chat as readable Markdown (export + clipboard handoff). */
+  private buildSessionMarkdown(): string | undefined {
     if (this.currentDisplay.length === 0) {
-      void vscode.window.showInformationMessage('Nyx: nothing to export — this chat is empty.');
-      return;
+      return undefined;
     }
     const title = this.currentTitle?.trim() || 'nyx-chat';
     const lines: string[] = [
@@ -1309,6 +1676,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
       }
     }
+    return lines.join('\n');
+  }
+
+  /** Exports the current chat as a readable Markdown file. */
+  async exportCurrentSession(): Promise<void> {
+    const markdown = this.buildSessionMarkdown();
+    if (!markdown) {
+      void vscode.window.showInformationMessage('Nyx: nothing to export — this chat is empty.');
+      return;
+    }
+    const title = this.currentTitle?.trim() || 'nyx-chat';
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'nyx-chat';
     const target = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.joinPath(this.workspaceRoot() ?? vscode.Uri.file(os.homedir()), `${slug}.md`),
@@ -1318,11 +1696,122 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (!target) {
       return;
     }
-    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(lines.join('\n')));
+    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(markdown));
     await vscode.window.showTextDocument(target, { preview: true });
   }
 
-  /** Distills the current session into a project-memory entry (heuristic, no model call). */
+  /** Copies the chat as Markdown to the clipboard — instant handoff to Cursor's agent, a PR, or a teammate. */
+  async copySessionToClipboard(): Promise<void> {
+    const markdown = this.buildSessionMarkdown();
+    if (!markdown) {
+      void vscode.window.showInformationMessage('Nyx: nothing to copy — this chat is empty.');
+      return;
+    }
+    await vscode.env.clipboard.writeText(markdown);
+    void vscode.window.showInformationMessage('Nyx: chat copied to the clipboard as Markdown.');
+  }
+
+  /**
+   * Inline quick edit (Cmd+K-style): selection + instruction → model rewrite →
+   * native diff confirmation → applied through the standard write machinery
+   * (checkpoint, backup, WorkspaceEdit) — no chat roundtrip.
+   */
+  async quickEdit(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.selection.isEmpty) {
+      void vscode.window.showInformationMessage('Nyx: select the code you want to change first.');
+      return;
+    }
+    if (this.models.length === 0) {
+      await this.refreshModels();
+    }
+    const model = this.findModel(this.selectedKey) ?? this.models[0];
+    if (!model) {
+      void vscode.window.showInformationMessage('Nyx: no local model available — start Ollama or LM Studio first.');
+      return;
+    }
+    const instruction = await vscode.window.showInputBox({
+      prompt: `Nyx quick edit with ${model.label} — what should change?`,
+      placeHolder: 'e.g. add error handling · extract a helper · convert to async/await',
+    });
+    if (!instruction?.trim()) {
+      return;
+    }
+    const doc = editor.document;
+    const selRange = new vscode.Range(editor.selection.start, editor.selection.end);
+    const selected = doc.getText(selRange);
+    const relPath = vscode.workspace.asRelativePath(doc.uri);
+    this.networkLog.record(model.endpoint, 'model inference');
+    let replacement: string;
+    try {
+      replacement = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Nyx: editing ${relPath}…` },
+        async () => {
+          const result = await streamChat(
+            {
+              endpoint: model.endpoint,
+              apiKey: model.apiKey,
+              model: model.id,
+              messages: [
+                {
+                  role: 'system',
+                  content:
+                    'You rewrite the selected code exactly as instructed. Reply with ONLY the replacement code — no markdown fences, no explanations. Preserve the indentation style of the original.',
+                },
+                { role: 'user', content: `File: ${relPath}\nInstruction: ${instruction.trim()}\n\nSelected code:\n${selected}` },
+              ],
+              temperature: 0,
+              maxTokens: 4096,
+              signal: AbortSignal.timeout(180000),
+            },
+            { onDelta: () => {} },
+          );
+          return stripSpecialTokens(result.content).trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
+        },
+      );
+    } catch (e) {
+      void vscode.window.showErrorMessage(`Nyx quick edit failed: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    if (!replacement.trim() || replacement === selected) {
+      void vscode.window.showInformationMessage('Nyx: the model produced no change.');
+      return;
+    }
+    const before = doc.getText();
+    const after = before.slice(0, doc.offsetAt(selRange.start)) + replacement + before.slice(doc.offsetAt(selRange.end));
+    const diff = summarizeDiff(before, after);
+    const choice = await vscode.window.showInformationMessage(
+      `Apply Nyx quick edit to ${relPath}? (+${diff.added} −${diff.removed})`,
+      { modal: true, detail: diff.preview.slice(0, 14).join('\n') },
+      'Apply',
+    );
+    if (choice !== 'Apply') {
+      return;
+    }
+    // Standard edit machinery: checkpoint + backup + WorkspaceEdit + shrink guard.
+    this.checkpoints.begin(this.session.getMessages().length);
+    const ctx: ToolContext = {
+      workspaceRoots: this.workspaceRoots(),
+      skills: [],
+      rules: [],
+      backupDir: vscode.Uri.joinPath(this.context.globalStorageUri, 'backups').fsPath,
+      processes: this.processes,
+      recordCheckpointFile: (p, content) => this.checkpoints.recordFile(p, content),
+    };
+    const outcome = await executeTool('write_file', JSON.stringify({ path: relPath, content: after }), ctx);
+    if (outcome.ok) {
+      void vscode.window.setStatusBarMessage(`Nyx: applied quick edit to ${relPath} (+${diff.added} −${diff.removed})`, 4000);
+      await this.postReview();
+    } else {
+      void vscode.window.showErrorMessage(`Nyx quick edit failed: ${outcome.content}`);
+    }
+  }
+
+  /**
+   * Distills the current session into a project-memory entry. A small
+   * utility-model call condenses goal + outcome + gotchas; the heuristic
+   * (last assistant answer) remains the offline fallback.
+   */
   private captureMemory(title: string): void {
     if (!this.currentSessionId) {
       return;
@@ -1344,8 +1833,62 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       lastAssistant && lastAssistant.kind === 'assistant' && lastAssistant.text.trim()
         ? lastAssistant.text.trim()
         : userGoals.join(' • ');
-    const summary = outcome.length > 700 ? `${outcome.slice(0, 700)}…` : outcome;
-    void this.memory.upsertAuto(this.currentSessionId, title || 'Session', summary, [...this.changedFiles]).then(() => this.postMemories());
+    const heuristic = outcome.length > 700 ? `${outcome.slice(0, 700)}…` : outcome;
+    // Only re-distill when the transcript actually grew (persistCurrent runs often).
+    const fingerprint = `${this.currentSessionId}:${this.currentDisplay.length}`;
+    if (this.lastMemoryCapture === fingerprint) {
+      return;
+    }
+    this.lastMemoryCapture = fingerprint;
+    void this.distillMemory(this.currentSessionId, title || 'Session', userGoals, heuristic);
+  }
+
+  /** Model-based session distillation with the heuristic summary as fallback. */
+  private async distillMemory(sessionId: string, title: string, userGoals: string[], fallback: string): Promise<void> {
+    let summary = fallback;
+    const model = this.utilityModel() ?? this.findModel(this.selectedKey);
+    if (model && !this.busy) {
+      try {
+        const lastAssistant = [...this.currentDisplay].reverse().find((d) => d.kind === 'assistant');
+        const context = [
+          `User goals:\n${userGoals.join('\n').slice(0, 2000)}`,
+          lastAssistant && lastAssistant.kind === 'assistant' ? `Final assistant answer:\n${lastAssistant.text.slice(0, 3000)}` : '',
+          this.changedFiles.size > 0 ? `Files changed: ${[...this.changedFiles].slice(0, 12).join(', ')}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+        const result = await streamChat(
+          {
+            endpoint: model.endpoint,
+            apiKey: model.apiKey,
+            model: model.id,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Distill this coding session into a 2-4 sentence memory for future sessions: what was the goal, what was actually done/decided, and any gotcha worth remembering. Plain text only — no markdown, no preamble.',
+              },
+              { role: 'user', content: context },
+            ],
+            temperature: 0,
+            maxTokens: 220,
+            signal: AbortSignal.timeout(45000),
+          },
+          { onDelta: () => {} },
+        );
+        const clean = stripSpecialTokens(result.content).trim();
+        if (clean) {
+          summary = clean.length > 700 ? `${clean.slice(0, 700)}…` : clean;
+        }
+      } catch {
+        // Utility model unavailable — the heuristic summary still lands.
+      }
+    }
+    if (this.currentSessionId !== sessionId) {
+      return; // the user switched chats while we were distilling
+    }
+    await this.memory.upsertAuto(sessionId, title, summary, [...this.changedFiles]);
+    this.postMemories();
   }
 
   private postMemories(): void {
@@ -1361,6 +1904,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.session.loadMessages(stored.modelMessages);
     this.checkpoints.load(stored.checkpoints);
     this.sessionAllow.clear();
+    this.networkLog.clear();
+    this.lastMemoryCapture = undefined;
     this.currentSessionId = stored.id;
     this.currentTitle = stored.title;
     this.currentTitleAuto = stored.titleAuto === true;

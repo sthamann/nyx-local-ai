@@ -131,6 +131,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('nyx.exportChat', () => {
       void provider.exportCurrentSession();
     }),
+    vscode.commands.registerCommand('nyx.copyChat', () => {
+      void provider.copySessionToClipboard();
+    }),
+    vscode.commands.registerCommand('nyx.quickEdit', () => {
+      void provider.quickEdit();
+    }),
+    vscode.commands.registerCommand('nyx.runQueue', () => {
+      void provider.startBatchRun();
+    }),
   );
   void checkForUpdates(context);
 

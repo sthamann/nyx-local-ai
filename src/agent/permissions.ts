@@ -14,6 +14,8 @@ const BALANCED: Record<string, PermissionPolicy> = {
   find_symbol: 'allow',
   find_references: 'allow',
   get_diagnostics: 'allow',
+  git_diff: 'allow',
+  git_log: 'allow',
   fetch_url: 'allow',
   web_search: 'allow',
   recall_memory: 'allow',

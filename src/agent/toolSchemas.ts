@@ -293,6 +293,32 @@ export const toolSchemas: ToolSchema[] = [
   {
     type: 'function',
     function: {
+      name: 'git_diff',
+      description:
+        'Show the uncommitted git changes of the workspace (working tree vs. HEAD) plus a short status — use this to see what was just changed. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: {
+          staged: { type: 'boolean', description: 'Show only staged changes (git diff --cached). Default false.' },
+          path: { type: 'string', description: 'Optional file or directory to limit the diff to.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_log',
+      description: 'Show the recent git commit history (one line per commit). Read-only.',
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number', description: 'Number of commits to show (default 15, max 100).' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'check_process',
       description: 'Check a background process started by run_command: returns its status and output so far.',
       parameters: {

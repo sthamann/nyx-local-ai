@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { resolveHelperUrl } from '../models/hosts';
 
 const PREFIX_CHARS = 4000;
 const SUFFIX_CHARS = 1200;
@@ -51,7 +52,7 @@ export class NyxCompletionProvider implements vscode.InlineCompletionItemProvide
   private config(): { url: string; model: string; maxTokens: number } {
     const cfg = vscode.workspace.getConfiguration('nyx');
     return {
-      url: (cfg.get<string>('autocompleteOllamaUrl') || cfg.get<string>('ollamaUrl') || 'http://localhost:11434').replace(/\/+$/, ''),
+      url: resolveHelperUrl('autocompleteOllamaUrl').replace(/\/+$/, ''),
       model: cfg.get<string>('autocompleteModel') || 'qwen2.5-coder:7b',
       maxTokens: cfg.get<number>('autocompleteMaxTokens') ?? 160,
     };

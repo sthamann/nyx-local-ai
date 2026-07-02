@@ -3,11 +3,15 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 export interface SemanticOptions {
-  /** Ollama host that serves (and if needed downloads) the embedding model. */
+  /** Host that serves (and if needed downloads) the embedding model. */
   embeddingUrl: string;
   /** Embedding model id, e.g. "nomic-embed-text". */
   embeddingModel: string;
   autoInstall: boolean;
+  /** Max files to index (default 2500, `nyx.indexMaxFiles`). */
+  maxFiles?: number;
+  /** Max chunks to keep in the index (default 12000, `nyx.indexMaxChunks`). */
+  maxChunks?: number;
   onStatus?: (text: string) => void;
 }
 
@@ -137,7 +141,9 @@ export class SemanticIndex {
     }
     await ensureEmbeddingModel(opts);
 
-    const uris = await vscode.workspace.findFiles(INCLUDE_GLOB, EXCLUDE_GLOB, MAX_FILES);
+    const maxFiles = Math.max(1, opts.maxFiles ?? MAX_FILES);
+    const maxChunks = Math.max(1, opts.maxChunks ?? MAX_CHUNKS);
+    const uris = await vscode.workspace.findFiles(INCLUDE_GLOB, EXCLUDE_GLOB, maxFiles);
     const seen = new Set<string>();
     const toEmbed: Array<{ file: string; hash: string; chunks: Array<{ startLine: number; endLine: number; text: string }> }> = [];
 
@@ -193,7 +199,7 @@ export class SemanticIndex {
     let done = 0;
     for (const fileEntry of toEmbed) {
       for (let i = 0; i < fileEntry.chunks.length; i += EMBED_BATCH) {
-        if (this.index.chunks.length >= MAX_CHUNKS) {
+        if (this.index.chunks.length >= maxChunks) {
           break;
         }
         const batch = fileEntry.chunks.slice(i, i + EMBED_BATCH);
@@ -218,7 +224,19 @@ export class SemanticIndex {
       this.index.files[fileEntry.file] = fileEntry.hash;
     }
     await this.saveToDisk();
-    return `Indexed ${toEmbed.length} file(s) (${done} chunks; total ${this.index.chunks.length}).`;
+    // Surface capped coverage so users know the index is partial and how to widen it.
+    const warnings: string[] = [];
+    if (uris.length >= maxFiles) {
+      warnings.push(`file limit reached (${maxFiles}) — raise nyx.indexMaxFiles to cover more of the workspace`);
+    }
+    if (this.index.chunks.length >= maxChunks) {
+      warnings.push(`chunk limit reached (${maxChunks}) — raise nyx.indexMaxChunks to index everything`);
+    }
+    const warnText = warnings.length > 0 ? ` ⚠ ${warnings.join('; ')}.` : '';
+    if (warnText) {
+      opts.onStatus?.(`Semantic index:${warnText}`);
+    }
+    return `Indexed ${toEmbed.length} file(s) (${done} chunks; total ${this.index.chunks.length}).${warnText}`;
   }
 
   /** Semantic search over the index (auto-builds/refreshes it first). */
@@ -358,29 +376,94 @@ function windowChunks(lines: string[], from: number, to: number): Chunk[] {
   return chunks;
 }
 
+/** Hosts that answered the Ollama /api/embed probe with 404 — use /v1/embeddings directly. */
+const openAiEmbedHosts = new Set<string>();
+
+/**
+ * Embeds texts through the local host. Tries Ollama's native `/api/embed`
+ * first; when the host doesn't speak it (LM Studio, llama.cpp server, vLLM),
+ * falls back to the OpenAI-compatible `/v1/embeddings` endpoint.
+ */
 async function embed(opts: SemanticOptions, inputs: string[]): Promise<number[][]> {
   const host = opts.embeddingUrl.replace(/\/+$/, '');
-  const res = await fetch(`${host}/api/embed`, {
+  if (!openAiEmbedHosts.has(host)) {
+    const res = await fetch(`${host}/api/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: opts.embeddingModel, input: inputs }),
+      signal: AbortSignal.timeout(120000),
+    }).catch(() => undefined);
+    if (res?.ok) {
+      const data = (await res.json()) as { embeddings?: number[][] };
+      if (Array.isArray(data.embeddings) && data.embeddings.length === inputs.length) {
+        return data.embeddings;
+      }
+      throw new Error('embedding server returned no vectors');
+    }
+    if (res) {
+      if (res.status !== 404 && res.status !== 405) {
+        throw new Error(`embedding request failed: HTTP ${res.status}`);
+      }
+      // The host answered but doesn't speak /api/embed — remember that.
+      openAiEmbedHosts.add(host);
+    }
+    // Network failure: fall through to /v1/embeddings once without caching,
+    // so a transient Ollama outage doesn't permanently switch the path.
+  }
+  return embedOpenAi(host, opts.embeddingModel, inputs);
+}
+
+/** OpenAI-compatible embeddings path for LM Studio / llama.cpp / vLLM hosts. */
+async function embedOpenAi(host: string, model: string, inputs: string[]): Promise<number[][]> {
+  const base = host.endsWith('/v1') ? host : `${host}/v1`;
+  const res = await fetch(`${base}/embeddings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: opts.embeddingModel, input: inputs }),
+    body: JSON.stringify({ model, input: inputs }),
     signal: AbortSignal.timeout(120000),
   });
   if (!res.ok) {
-    throw new Error(`embedding request failed: HTTP ${res.status}`);
+    throw new Error(`embedding request failed: HTTP ${res.status} (tried /api/embed and /v1/embeddings)`);
   }
-  const data = (await res.json()) as { embeddings?: number[][] };
-  if (!Array.isArray(data.embeddings) || data.embeddings.length !== inputs.length) {
+  const data = (await res.json()) as { data?: Array<{ embedding?: number[] }> };
+  const vectors = (data.data ?? []).map((d) => d.embedding).filter((v): v is number[] => Array.isArray(v));
+  if (vectors.length !== inputs.length) {
     throw new Error('embedding server returned no vectors');
   }
-  return data.embeddings;
+  return vectors;
+}
+
+/** Public embedding entry point, reused by the memory store's semantic recall. */
+export function embedTexts(opts: SemanticOptions, inputs: string[]): Promise<number[][]> {
+  return embed(opts, inputs);
+}
+
+/** Cosine similarity of two float vectors (0 when either is empty). */
+export function cosineSimilarity(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  if (n === 0) {
+    return 0;
+  }
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na > 0 && nb > 0 ? dot / Math.sqrt(na * nb) : 0;
 }
 
 async function ensureEmbeddingModel(opts: SemanticOptions): Promise<void> {
   const host = opts.embeddingUrl.replace(/\/+$/, '');
-  const tags = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) })
-    .then((r) => (r.ok ? (r.json() as Promise<{ models?: Array<{ name?: string }> }>) : { models: [] }))
-    .catch(() => ({ models: [] as Array<{ name?: string }> }));
+  const probe = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => undefined);
+  if (!probe || !probe.ok) {
+    // Not an Ollama host (LM Studio, llama.cpp, vLLM) — nothing to pull here;
+    // the /v1/embeddings fallback surfaces real errors at embed time.
+    return;
+  }
+  const tags = (await probe.json().catch(() => ({}))) as { models?: Array<{ name?: string }> };
   const have = (tags.models ?? []).some((m) => m.name === opts.embeddingModel || m.name?.startsWith(`${opts.embeddingModel}:`));
   if (have) {
     return;

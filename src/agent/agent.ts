@@ -40,6 +40,7 @@ export const BASE_SYSTEM_PROMPT = [
   '  http_request(method, url, headers?, body?) — test local APIs/dev servers, wait(seconds),',
   '  write_file(path, content), edit_file(path, old_string, new_string, replace_all?),',
   '  delete_file(path), rename_file(from, to), get_diagnostics(path?),',
+  '  git_diff(staged?, path?) — uncommitted changes + status, git_log(limit?) — recent commits,',
   '  fetch_url(url), web_search(query, limit?), run_command(command, background?),',
   '  browser_navigate(url), browser_snapshot(), browser_click(ref), browser_type(ref, text, submit?), browser_screenshot(), browser_close() — headless browser; snapshots list interactive elements as [ref] numbers,',
   '  check_process(id), kill_process(id) — poll or stop a background command,',
@@ -90,6 +91,14 @@ export interface RunOptions {
   toolProfile: ToolProfile;
   /** Smaller model used for context compaction (smart routing); defaults to the main model. */
   compactModel?: ModelInfo;
+  /**
+   * Benchmark-based routing (opt-in): model used for the execution turns
+   * (step ≥ 1, where edits happen) while `model` handles the first
+   * plan/reasoning turn. Undefined = single-model behavior.
+   */
+  executionModel?: ModelInfo;
+  /** Failover candidates for `executionModel` (same id on other machines). */
+  executionFallbacks?: ModelInfo[];
   /** Tools provided by connected MCP servers (offered in addition to built-ins). */
   mcpTools?: McpWireTool[];
   /** Executes an MCP tool call (wired to the McpManager). */
@@ -128,6 +137,8 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'find_symbol',
   'find_references',
   'get_diagnostics',
+  'git_diff',
+  'git_log',
   'fetch_url',
   'web_search',
   'recall_memory',
@@ -506,9 +517,14 @@ export class AgentSession {
         }
       }
       cb.onAssistantStart();
+      // Benchmark routing: the first turn (plan/reasoning) stays on `model`,
+      // execution turns switch to the edit-precision winner when configured.
+      const routed = step > 0 && options.executionModel && options.executionModel.key !== model.key;
+      const turnModel = routed ? (options.executionModel as ModelInfo) : model;
+      const turnFallbacks = routed ? options.executionFallbacks ?? [] : options.fallbackModels ?? [];
       const { result } = await this.streamWithRetry(
-        model,
-        options.fallbackModels ?? [],
+        turnModel,
+        turnFallbacks,
         { tools: useTools ? schemas : undefined, extract: useTools, toolNames, signal, maxOutputTokens: options.maxOutputTokens },
         cb,
       );

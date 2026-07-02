@@ -61,6 +61,15 @@ export function renderReview(files: ReviewFile[]): void {
 
     head.appendChild(name);
     head.appendChild(badge);
+    if (!file.deleted) {
+      const openDiff = document.createElement('button');
+      openDiff.type = 'button';
+      openDiff.className = 'nyx-btn secondary nyx-review-diffbtn';
+      openDiff.textContent = 'Open diff';
+      openDiff.title = 'Open the native diff view (session start ↔ current file)';
+      openDiff.addEventListener('click', () => post({ type: 'openDiff', path: file.path }));
+      head.appendChild(openDiff);
+    }
     head.appendChild(revert);
     card.appendChild(head);
 
