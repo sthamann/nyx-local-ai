@@ -150,6 +150,12 @@ const TOOL_ICONS: Record<string, string> = {
   run_script: '\u{1F9EA}',
   check_process: '\u23F1',
   kill_process: '\u23F9',
+  browser_navigate: '\u{1F310}',
+  browser_snapshot: '\u{1F4F7}',
+  browser_click: '\u{1F5B1}',
+  browser_type: '\u2328',
+  browser_screenshot: '\u{1F4F8}',
+  browser_close: '\u274E',
   read_rule: '\u{1F4D0}',
   use_skill: '\u2728',
   recall_memory: '\u{1F9E0}',
@@ -174,6 +180,12 @@ export const TOOL_VERBS: Record<string, string> = {
   run_script: 'Ran script',
   check_process: 'Checked process',
   kill_process: 'Stopped process',
+  browser_navigate: 'Browsed',
+  browser_snapshot: 'Read page',
+  browser_click: 'Clicked',
+  browser_type: 'Typed',
+  browser_screenshot: 'Screenshot',
+  browser_close: 'Closed browser',
   read_rule: 'Read rule',
   use_skill: 'Used skill',
   recall_memory: 'Recalled memory',
@@ -194,8 +206,11 @@ export function summarizeArgs(name: string, rawArgs: string): string {
       const firstString = Object.values(args).find((v) => typeof v === 'string');
       return typeof firstString === 'string' ? firstString.slice(0, 80) : '';
     }
-    if (name === 'fetch_url') {
+    if (name === 'fetch_url' || name === 'browser_navigate') {
       return String(args.url ?? '');
+    }
+    if (name === 'browser_click' || name === 'browser_type') {
+      return `[${String(args.ref ?? '?')}]${args.text ? ` ${String(args.text).slice(0, 40)}` : ''}`;
     }
     if (name === 'run_script') {
       return String(args.language ?? '');

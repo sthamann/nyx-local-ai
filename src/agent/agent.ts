@@ -27,6 +27,7 @@ export const BASE_SYSTEM_PROMPT = [
   '  write_file(path, content), edit_file(path, old_string, new_string, replace_all?),',
   '  delete_file(path), rename_file(from, to), get_diagnostics(path?),',
   '  fetch_url(url), web_search(query, limit?), run_command(command, background?),',
+  '  browser_navigate(url), browser_snapshot(), browser_click(ref), browser_type(ref, text, submit?), browser_screenshot(), browser_close() — headless browser; snapshots list interactive elements as [ref] numbers,',
   '  check_process(id), kill_process(id) — poll or stop a background command,',
   '  run_script(language, code) — write & run a throwaway script (bash/sh/zsh/python/node) to test or verify,',
   '  recall_memory(query?, limit?), save_memory(title, summary, files?),',

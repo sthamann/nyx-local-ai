@@ -8,12 +8,13 @@ import { spawn } from 'child_process';
 import type { DiffSummary } from '../types';
 import type { SkillMeta } from '../context/skills';
 import type { RuleMeta } from '../context/rules';
-import { convertMedia, mediaKind, type MediaOptions } from '../context/media';
+import { convertImageBytes, convertMedia, mediaKind, type MediaOptions } from '../context/media';
 import { webSearch } from '../context/web';
 import { summarizeDiff } from './diff';
 import { parseJsonLoose } from '../models/client';
 import type { ProcessManager } from './processes';
 import type { SemanticIndex, SemanticOptions } from '../context/semanticIndex';
+import type { BrowserManager } from './browser';
 
 export { toolSchemas, schemasForModel } from './toolSchemas';
 export type { ToolProfile } from './toolSchemas';
@@ -55,6 +56,8 @@ export interface ToolContext {
   allowPrivateNetwork?: boolean;
   /** Local embedding index for semantic_search (undefined = disabled). */
   semantic?: { index: SemanticIndex; options: SemanticOptions };
+  /** Headless browser session for the browser_* tools. */
+  browser?: BrowserManager;
   memory?: {
     recall: (query: string | undefined, limit: number) => string;
     save: (title: string, summary: string, files: string[]) => string;
@@ -203,6 +206,18 @@ export async function executeTool(name: string, rawArgs: string, ctx: ToolContex
       return checkProcess(ctx, String(args.id ?? ''));
     case 'kill_process':
       return killProcess(ctx, String(args.id ?? ''));
+    case 'browser_navigate':
+      return browserTool(ctx, (b) => b.navigate(String(args.url ?? '')));
+    case 'browser_snapshot':
+      return browserTool(ctx, (b) => b.snapshot());
+    case 'browser_click':
+      return browserTool(ctx, (b) => b.click(Number(args.ref)));
+    case 'browser_type':
+      return browserTool(ctx, (b) => b.type(Number(args.ref), String(args.text ?? ''), args.submit === true));
+    case 'browser_screenshot':
+      return browserScreenshot(ctx);
+    case 'browser_close':
+      return browserTool(ctx, (b) => b.close());
     case 'recall_memory':
       return recallMemory(ctx, args.query ? String(args.query) : undefined, Number(args.limit) || 5);
     case 'save_memory':
@@ -969,6 +984,33 @@ function killProcess(ctx: ToolContext, id: string): ToolOutcome {
   return ctx.processes.kill(id)
     ? { ok: true, content: `Sent SIGTERM to process ${id}.` }
     : { ok: false, content: `No process with id ${id}.` };
+}
+
+async function browserTool(ctx: ToolContext, action: (b: BrowserManager) => Promise<string>): Promise<ToolOutcome> {
+  if (!ctx.browser) {
+    return { ok: false, content: 'Browser automation is not available in this context.' };
+  }
+  try {
+    return { ok: true, content: wrapUntrusted('browser page', truncate(await action(ctx.browser))) };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+async function browserScreenshot(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!ctx.browser) {
+    return { ok: false, content: 'Browser automation is not available in this context.' };
+  }
+  try {
+    const { file, bytes } = await ctx.browser.screenshot();
+    let description = '(no vision toolchain configured)';
+    if (ctx.media) {
+      description = await convertImageBytes(bytes, 'png', ctx.media);
+    }
+    return { ok: true, content: `Screenshot saved to ${file}\n\n${truncate(description)}` };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
 }
 
 function recallMemory(ctx: ToolContext, query: string | undefined, limit: number): ToolOutcome {

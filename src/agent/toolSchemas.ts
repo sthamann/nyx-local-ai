@@ -235,6 +235,71 @@ export const toolSchemas: ToolSchema[] = [
   {
     type: 'function',
     function: {
+      name: 'browser_navigate',
+      description:
+        'Open an http(s) URL in a headless browser (uses the locally installed Chrome/Edge). Returns the page title, text, and numbered interactive elements for browser_click / browser_type.',
+      parameters: {
+        type: 'object',
+        properties: { url: { type: 'string', description: 'The http(s) URL to open.' } },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browser_snapshot',
+      description: 'Re-read the current browser page: title, visible text, and numbered interactive elements.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browser_click',
+      description: 'Click an interactive element by its [ref] number from the latest browser snapshot.',
+      parameters: {
+        type: 'object',
+        properties: { ref: { type: 'number', description: 'Element number from the snapshot, e.g. 3.' } },
+        required: ['ref'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browser_type',
+      description: 'Type text into an input element by its [ref] number; optionally press Enter afterwards.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ref: { type: 'number', description: 'Element number from the snapshot.' },
+          text: { type: 'string', description: 'The text to type.' },
+          submit: { type: 'boolean', description: 'Press Enter after typing (default false).' },
+        },
+        required: ['ref', 'text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browser_screenshot',
+      description: 'Take a screenshot of the current browser page. It is described through the local vision toolchain so you can inspect the visual result.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browser_close',
+      description: 'Close the headless browser when you are done with web automation.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'recall_memory',
       description:
         'Search the project memory of key outcomes from earlier sessions to see what the user did before. Call this at the start of a task when past context could help.',

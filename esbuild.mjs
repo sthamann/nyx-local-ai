@@ -11,7 +11,7 @@ const extensionConfig = {
   platform: 'node',
   target: 'node18',
   outfile: 'dist/extension.js',
-  external: ['vscode', 'tesseract.js'],
+  external: ['vscode', 'tesseract.js', 'playwright-core'],
   sourcemap: !production,
   minify: production,
   logLevel: 'info',

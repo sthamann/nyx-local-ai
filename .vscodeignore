@@ -26,6 +26,11 @@ node_modules/tesseract.js-core/tesseract-core-relaxedsimd.js
 node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm
 node_modules/tesseract.js-core/*.wasm.js
 node_modules/tesseract.js/dist/**
+
+# playwright-core: we only drive a local Chrome over CDP — the bundled trace
+# viewer UI (lib/vite) and type declarations are dead weight.
+node_modules/playwright-core/lib/vite/**
+node_modules/playwright-core/types/**
 node_modules/zlibjs/bin/**
 node_modules/zlibjs/src/**
 node_modules/zlibjs/test/**

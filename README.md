@@ -220,6 +220,17 @@ Nyx can live in the left Activity Bar (default) or the **secondary side bar** on
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
 - **Chat** is a single plain streaming response with no tools.
 
+### Browser automation
+The agent can drive a **headless browser** — using the Chrome/Edge you already
+have installed (via playwright-core, no browser download): `browser_navigate`
+opens a page and returns its text plus **numbered interactive elements**;
+`browser_click(ref)` / `browser_type(ref, text, submit?)` interact with them;
+`browser_snapshot` re-reads the page and `browser_screenshot` runs the shot
+through the local vision toolchain so the agent can *see* the result. Perfect
+for "start the dev server and check the page renders" loops. Navigation,
+clicks, and typing require approval by default; page content is wrapped as
+untrusted data. Custom binary via `nyx.browserExecutable`.
+
 ### Tab autocomplete (fill-in-the-middle)
 Inline ghost-text completions from a small local model — the missing piece
 that previously required a second extension (Twinny/Continue). Opt-in via
@@ -290,6 +301,11 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `run_script` | Write & run a throwaway test script (bash/sh/zsh/python/node) | ask |
 | `check_process` | Poll a background process (status + output) | allow |
 | `kill_process` | Stop a background process | allow |
+| `browser_navigate` | Open a URL in the headless browser | ask |
+| `browser_snapshot` | Read the current page (text + elements) | allow |
+| `browser_click` / `browser_type` | Interact with page elements | ask |
+| `browser_screenshot` | Screenshot + vision description | allow |
+| `browser_close` | Close the headless browser | allow |
 | `mcp_<server>_<tool>` | Any tool from a connected MCP server | ask |
 
 ### Permissions
@@ -593,7 +609,8 @@ storage; project memory lives in the workspace state.
 
 ## Roadmap (not yet implemented)
 
-- **Browser automation** (Playwright) as a built-in tool.
+- **Tree-sitter chunking** for the semantic index (structure-aware chunking shipped; full AST parsing next).
+- **Marketplace / Open VSX publishing** from the release CI.
 
 ---
 

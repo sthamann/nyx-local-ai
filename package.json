@@ -294,6 +294,11 @@
           "default": "auto",
           "description": "Which tool set to offer the model. 'reduced' exposes only the core tools (better for ~7B models); 'auto' picks based on the model size in its name."
         },
+        "nyx.browserExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a Chromium-based browser binary for the browser_* tools. Empty = auto-detect installed Chrome/Edge."
+        },
         "nyx.autocompleteEnabled": {
           "type": "boolean",
           "default": false,
@@ -427,6 +432,7 @@
     "unpdf": "^1.6.2"
   },
   "dependencies": {
+    "playwright-core": "^1.61.1",
     "tesseract.js": "^7.0.0"
   }
 }

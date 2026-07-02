@@ -14,6 +14,7 @@ import { buildAttachmentContext, buildMentionContext, buildUrlContext } from './
 import { SessionStore } from './SessionStore';
 import type { StoredSession } from './SessionStore';
 import { loadMcpConfigs, McpManager } from '../mcp/client';
+import { BrowserManager, cleanupBrowserShots } from '../agent/browser';
 import { SemanticIndex } from '../context/semanticIndex';
 import type { SemanticOptions } from '../context/semanticIndex';
 import type { MediaOptions } from '../context/media';
@@ -37,6 +38,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private readonly sessions: SessionStore;
   private readonly mcp: McpManager;
   private readonly semanticIndex: SemanticIndex;
+  private readonly browser: BrowserManager;
   private models: ModelInfo[] = [];
   private skillsCache: SkillMeta[] = [];
   private selectedKey: string | undefined;
@@ -74,11 +76,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       (context.storageUri ?? context.globalStorageUri).fsPath,
       () => this.workspaceRoot(),
     );
+    this.browser = new BrowserManager(
+      () => vscode.workspace.getConfiguration('nyx').get<string>('browserExecutable') || undefined,
+    );
+    void cleanupBrowserShots();
   }
 
   dispose(): void {
     this.processes.killAll();
     this.mcp.disposeAll();
+    void this.browser.dispose();
   }
 
   private semanticOptions(): SemanticOptions | undefined {
@@ -516,6 +523,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       recordCheckpointFile: (relPath, content) => this.checkpoints.recordFile(relPath, content),
       allowPrivateNetwork: cfg.get<boolean>('allowPrivateNetworkFetch') ?? false,
       semantic: semanticOpts ? { index: this.semanticIndex, options: semanticOpts } : undefined,
+      browser: this.browser,
       memory: {
         recall: (query, limit) => this.memory.formatRecall(query, limit, this.currentSessionId),
         save: (title, summary, files) => {
