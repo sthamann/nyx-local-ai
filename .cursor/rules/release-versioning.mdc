@@ -15,18 +15,20 @@ Never introduce a different slug.
 2. `README.md` → status line (`**vX.Y.Z**`) and every `nyx-local-ai-X.Y.Z.vsix` mention
 3. `src/mcp/client.ts` → `clientInfo.version`
 
-Quick check for stragglers: `rg -n "0\.<old-minor>\." package.json README.md src/mcp/client.ts`
-
 ## Quality gates before packaging
 
 Run in this order; all must pass:
 
 ```bash
 npm run typecheck
-node .harness/smoke.mjs      # parser/edit logic smoke tests — must print ALL PASS
+node .harness/smoke.mjs         # parser/edit logic — must print ALL PASS
+node .harness/readme-check.mjs  # README/version sync — must print ALL PASS
 npm run build
 npm run package
 ```
+
+The readme-check also catches missed version bumps (it verifies all three
+locations), so don't rely on `sed` output alone — seds fail silently.
 
 ## Releasing
 

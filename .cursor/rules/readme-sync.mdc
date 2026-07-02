@@ -1,0 +1,29 @@
+---
+description: Keep README.md in sync with the product surface, verified by the readme-check gate
+alwaysApply: true
+---
+
+# README stays in sync — enforced, not hoped
+
+README.md is the product's single source of documentation. Any change to the
+product surface must update it **in the same commit**:
+
+- new/changed **setting** → Settings table + relevant feature section
+- new/changed **command** → Commands table (and keybinding note if any)
+- new/changed **tool** → Tools table with its default permission
+- new **feature** → Highlights bullet + a "Features in depth" section + a
+  numbered step in "How to test"
+- version bump → status line, `.vsix` mentions, and `src/mcp/client.ts`
+  `clientInfo.version`
+
+## The gate
+
+```bash
+node .harness/readme-check.mjs   # must print "README CHECK: ALL PASS"
+```
+
+It cross-checks README against `package.json` (settings, commands, version),
+the tool schemas, and the MCP client version. Run it **before every commit
+that touches `package.json`, `src/agent/toolSchemas.ts`, or bumps a version**,
+and always before packaging a release. It exists because a silently failing
+`sed` once left the MCP client version three releases behind.

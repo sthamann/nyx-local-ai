@@ -26,19 +26,18 @@ Three places must always carry the same version:
 # src/mcp/client.ts    → clientInfo: { version: 'X.Y.Z' }
 ```
 
-Verify nothing was missed (must return no hits for the old version):
-
-```bash
-rg -n "<OLD_VERSION>" package.json README.md src/mcp/client.ts
-```
-
 ## 2. Quality gates
 
 ```bash
-npm run typecheck            # must exit 0
-node .harness/smoke.mjs      # must print ALL PASS
-npm run build                # must print "[nyx] build complete"
+npm run typecheck               # must exit 0
+node .harness/smoke.mjs         # must print ALL PASS
+node .harness/readme-check.mjs  # must print "README CHECK: ALL PASS"
+npm run build                   # must print "[nyx] build complete"
 ```
+
+The readme-check verifies all three version locations AND that every setting,
+command, and tool is documented in README.md — fix any FAIL before continuing
+(update the README, don't weaken the check).
 
 If parser/edit logic changed in this release, confirm `.harness/smoke.mjs`
 covers it before proceeding.
