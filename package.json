@@ -110,6 +110,11 @@
         "command": "nyx.toggleAutocomplete",
         "title": "Toggle Tab Autocomplete",
         "category": "Nyx"
+      },
+      {
+        "command": "nyx.checkForUpdates",
+        "title": "Check for Updates",
+        "category": "Nyx"
       }
     ],
     "keybindings": [
@@ -356,6 +361,11 @@
           "additionalProperties": {
             "type": "object"
           }
+        },
+        "nyx.updateCheck": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check GitHub releases once a day and offer one-click updates (single anonymous API call; no telemetry)."
         },
         "nyx.utilityModel": {
           "type": "string",

@@ -189,6 +189,10 @@ Releases are produced by CI (`.github/workflows/release.yml`): pushing a `v*`
 tag builds the `.vsix` and attaches it as `nyx-local-ai.vsix` together with
 `checksums.txt` — exactly what the installers download and verify.
 
+**Staying up to date:** Nyx checks GitHub releases once a day (a single
+anonymous API call — disable with `nyx.updateCheck`) and offers a one-click
+in-editor update; *Nyx: Check for Updates* runs the check on demand.
+
 Then **reload the window** (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*) and click the **Nyx** icon in the Activity Bar (or the **Nyx** entry in the status bar).
 
 ---

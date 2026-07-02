@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SidebarProvider } from './provider/SidebarProvider';
 import { DropZoneProvider } from './provider/DropZoneProvider';
 import { NyxCompletionProvider } from './autocomplete/completer';
+import { checkForUpdates } from './updater';
 
 const RIGHT_SIDE_PROMPT_KEY = 'nyx.rightSidePrompted';
 
@@ -124,7 +125,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('nyx.rebuildIndex', () => {
       void provider.buildSemanticIndex(true);
     }),
+    vscode.commands.registerCommand('nyx.checkForUpdates', () => {
+      void checkForUpdates(context, true);
+    }),
   );
+  void checkForUpdates(context);
 
   // Tab autocomplete (fill-in-the-middle on a small local model, opt-in).
   const completer = new NyxCompletionProvider();
