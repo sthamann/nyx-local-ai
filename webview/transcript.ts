@@ -1,5 +1,5 @@
-import type { DiffSummary, DisplayItem, QuestionType } from '../src/types';
-import { escapeHtml, messagesEl, scrollToBottom, speedEl } from './dom';
+import type { DiffSummary, DisplayItem, PlanItem, QuestionType } from '../src/types';
+import { escapeHtml, messagesEl, planEl, scrollToBottom, speedEl } from './dom';
 import { renderMarkdown, renderMarkdownFinal } from './markdown';
 import { post, S } from './state';
 
@@ -551,6 +551,34 @@ export function renderQuestion(id: string, question: string, qtype: QuestionType
   card.appendChild(form);
   messagesEl.appendChild(card);
   scrollToBottom(true);
+}
+
+// ---- Agent task plan (set_plan tool) ----
+
+export function renderPlan(items: PlanItem[]): void {
+  planEl.innerHTML = '';
+  planEl.hidden = items.length === 0;
+  if (items.length === 0) {
+    return;
+  }
+  const done = items.filter((i) => i.status === 'done').length;
+  const head = document.createElement('div');
+  head.className = 'nyx-plan-head';
+  head.textContent = `Plan · ${done}/${items.length}`;
+  planEl.appendChild(head);
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = `nyx-plan-item ${item.status}`;
+    const icon = document.createElement('span');
+    icon.className = 'nyx-plan-icon';
+    icon.textContent = item.status === 'done' ? '\u2713' : item.status === 'active' ? '\u25B8' : '\u25CB';
+    const text = document.createElement('span');
+    text.className = 'nyx-plan-text';
+    text.textContent = item.text;
+    row.appendChild(icon);
+    row.appendChild(text);
+    planEl.appendChild(row);
+  }
 }
 
 // ---- Errors, step limit, working indicator ----

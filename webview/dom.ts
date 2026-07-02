@@ -16,6 +16,7 @@ app.innerHTML = `
         <button id="nyx-mode-chat" type="button" aria-pressed="false" title="Chat — a plain answer, no tools or file changes">Chat</button>
       </div>
     </div>
+    <div class="nyx-plan" id="nyx-plan" hidden aria-label="Agent task plan"></div>
     <div class="nyx-messages" id="nyx-messages" role="log" aria-live="polite"></div>
     <div class="nyx-composer">
       <div class="nyx-queue" id="nyx-queue" hidden>
@@ -126,6 +127,7 @@ export const manageBtn = el<HTMLButtonElement>('nyx-manage');
 export const mmBackBtn = el<HTMLButtonElement>('nyx-mm-back');
 export const mmAddBtn = el<HTMLButtonElement>('nyx-mm-add');
 export const mentionsEl = el<HTMLDivElement>('nyx-mentions');
+export const planEl = el<HTMLDivElement>('nyx-plan');
 export const dropOverlay = el<HTMLDivElement>('nyx-drop');
 export const dropSub = el<HTMLElement>('nyx-drop-sub');
 

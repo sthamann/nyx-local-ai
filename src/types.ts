@@ -148,6 +148,12 @@ export interface SessionMeta {
   mode?: ChatMode;
 }
 
+/** One entry of the agent's visible task plan. */
+export interface PlanItem {
+  text: string;
+  status: 'pending' | 'active' | 'done';
+}
+
 /** A file, folder, or editor selection attached to enrich the next message. */
 export interface AttachmentMeta {
   path: string;
@@ -229,4 +235,6 @@ export type HostToWebview =
   | { type: 'stepLimit' }
   /** Prefills the composer (after a checkpoint restore / message edit). */
   | { type: 'composerSet'; text: string }
-  | { type: 'mentionResults'; token: string; files: string[] };
+  | { type: 'mentionResults'; token: string; files: string[] }
+  /** The agent's current task plan (empty array hides the card). */
+  | { type: 'plan'; items: PlanItem[] };

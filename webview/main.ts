@@ -34,6 +34,7 @@ import {
   onReasoning,
   registerToolCall,
   renderEmptyState,
+  renderPlan,
   renderQuestion,
   renderTranscript,
   renderUser,
@@ -299,6 +300,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'mentionResults':
       onMentionResults(message.token, message.files);
+      return;
+    case 'plan':
+      renderPlan(message.items);
       return;
     default: {
       const exhaustive: never = message;

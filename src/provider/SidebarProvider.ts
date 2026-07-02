@@ -18,7 +18,7 @@ import { BrowserManager, cleanupBrowserShots } from '../agent/browser';
 import { SemanticIndex } from '../context/semanticIndex';
 import type { SemanticOptions } from '../context/semanticIndex';
 import type { MediaOptions } from '../context/media';
-import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, QuestionType, WebviewToHost } from '../types';
+import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, PlanItem, QuestionType, WebviewToHost } from '../types';
 
 const QUEUE_KEY = 'nyx.queue.v1';
 
@@ -66,6 +66,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private busy = false;
   private stopRequested = false;
   private lastUserText: string | undefined;
+  private currentPlan: PlanItem[] = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.memory = new MemoryStore(context.workspaceState);
@@ -200,6 +201,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.currentMachineName = undefined;
     this.currentMode = undefined;
     this.lastUserText = undefined;
+    this.currentPlan = [];
+    this.post({ type: 'plan', items: [] });
     this.setQueue([]);
     this.post({ type: 'cleared' });
     this.post({ type: 'context', usedTokens: 0, budgetTokens: 0 });
@@ -524,6 +527,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       allowPrivateNetwork: cfg.get<boolean>('allowPrivateNetworkFetch') ?? false,
       semantic: semanticOpts ? { index: this.semanticIndex, options: semanticOpts } : undefined,
       browser: this.browser,
+      setPlan: (items) => {
+        this.currentPlan = items;
+        this.post({ type: 'plan', items });
+      },
       memory: {
         recall: (query, limit) => this.memory.formatRecall(query, limit, this.currentSessionId),
         save: (title, summary, files) => {
@@ -899,6 +906,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       modelMessages: JSON.parse(JSON.stringify(this.session.getMessages())) as StoredSession['modelMessages'],
       display: this.currentDisplay.slice(),
       checkpoints: this.checkpoints.serialize(),
+      plan: this.currentPlan,
       modelId: this.currentModelId,
       modelKey: this.currentModelKey,
       modelLabel: this.currentModelLabel,
@@ -963,6 +971,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.currentModelLabel = stored.modelLabel;
     this.currentMachineName = stored.machineName;
     this.currentMode = stored.mode;
+    this.currentPlan = stored.plan ?? [];
+    this.post({ type: 'plan', items: this.currentPlan });
     // Re-select the model this chat used, if it is still available, so continuing
     // the conversation keeps the same agent.
     const match = this.findModel(this.currentModelKey);

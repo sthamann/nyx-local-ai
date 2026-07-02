@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ChatMessage, ChatMode, DisplayItem, SessionMeta } from '../types';
+import type { ChatMessage, ChatMode, DisplayItem, PlanItem, SessionMeta } from '../types';
 import type { SerializedCheckpoint } from '../agent/checkpoints';
 
 export interface StoredSession {
@@ -14,6 +14,7 @@ export interface StoredSession {
   modelMessages: ChatMessage[];
   display: DisplayItem[];
   checkpoints?: SerializedCheckpoint[];
+  plan?: PlanItem[];
   /** The model/agent and machine this chat last ran with. */
   modelId?: string;
   modelKey?: string;

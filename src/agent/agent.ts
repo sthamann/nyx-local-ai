@@ -32,6 +32,7 @@ export const BASE_SYSTEM_PROMPT = [
   '  run_script(language, code) — write & run a throwaway script (bash/sh/zsh/python/node) to test or verify,',
   '  recall_memory(query?, limit?), save_memory(title, summary, files?),',
   '  read_rule(name), use_skill(name),',
+  '  set_plan(items) — items is the FULL list of { text, status: "pending"|"active"|"done" }. For any task with 3+ steps, call it first with the plan, and update statuses as you complete steps,',
   '  ask_user(question, type, options) — type is "single", "multiple" or "text"; options is a list for single/multiple.',
   '- Finding code: use semantic_search for conceptual questions ("where is auth handled?"); use search_files for exact strings/regexes. Tools prefixed with mcp_ come from connected MCP servers — call them exactly like the built-in tools.',
   '- Editing files: ALWAYS prefer edit_file (targeted search/replace on the full on-disk content) so the rest of the file is preserved. Use write_file ONLY for brand-new files or a deliberate, complete rewrite — never write a file back from a truncated read. read_file shows large files partially; page with { offset, limit }.',

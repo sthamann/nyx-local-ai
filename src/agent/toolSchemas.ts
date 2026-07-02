@@ -356,6 +356,32 @@ export const toolSchemas: ToolSchema[] = [
   {
     type: 'function',
     function: {
+      name: 'set_plan',
+      description:
+        'Show/update your task plan in the UI. Call it at the start of a multi-step task with all steps, then again whenever a step finishes (mark it "done" and the next one "active"). Always pass the FULL list.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: 'The complete plan.',
+            items: {
+              type: 'object',
+              properties: {
+                text: { type: 'string', description: 'Short step description.' },
+                status: { type: 'string', enum: ['pending', 'active', 'done'], description: 'Current step status.' },
+              },
+              required: ['text', 'status'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ask_user',
       description:
         'Ask the user a clarifying question when requirements are ambiguous, instead of guessing. The user answers via single choice, multiple choice, or free text.',

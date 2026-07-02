@@ -220,6 +220,13 @@ Nyx can live in the left Activity Bar (default) or the **secondary side bar** on
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
 - **Chat** is a single plain streaming response with no tools.
 
+### Task plan display
+For multi-step tasks the agent maintains a **visible plan**: `set_plan` renders
+a pinned card above the transcript with ○ pending / ▸ active / ✓ done steps and
+a progress counter, updated as the agent works. The plan is persisted with the
+chat and restored when you reopen it — so you always know where a long-running
+task stands.
+
 ### Browser automation
 The agent can drive a **headless browser** — using the Chrome/Edge you already
 have installed (via playwright-core, no browser download): `browser_navigate`
@@ -293,6 +300,7 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `read_rule` | Load a project rule by name | allow |
 | `use_skill` | Load a skill's full instructions | allow |
 | `ask_user` | Ask a clarifying question | allow |
+| `set_plan` | Show/update the visible task plan | allow |
 | `write_file` | Create/overwrite a file (with diff + backup) | ask |
 | `edit_file` | Targeted search/replace edit (with diff + backup) | ask |
 | `delete_file` | Delete a file (to trash + backup) | ask |

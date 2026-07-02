@@ -1831,3 +1831,48 @@ select.nyx-inp {
 .hljs-strong {
   font-weight: 600;
 }
+
+/* ---- v0.25: agent task plan (set_plan) ---- */
+.nyx-plan {
+  margin: 6px 10px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--nyx-border);
+  border-radius: 8px;
+  background: var(--vscode-input-background, rgba(255, 255, 255, 0.03));
+  font-size: 12px;
+  max-height: 160px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.nyx-plan-head {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--nyx-muted);
+  margin-bottom: 6px;
+}
+
+.nyx-plan-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+
+.nyx-plan-icon {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.nyx-plan-item.done .nyx-plan-icon { color: #4caf78; }
+.nyx-plan-item.done .nyx-plan-text {
+  color: var(--nyx-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(128, 128, 128, 0.5);
+}
+.nyx-plan-item.active .nyx-plan-icon { color: var(--nyx-accent); }
+.nyx-plan-item.active .nyx-plan-text { font-weight: 600; }
+.nyx-plan-item.pending .nyx-plan-icon { color: var(--nyx-muted); }

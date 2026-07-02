@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as net from 'node:net';
 import { spawn } from 'child_process';
-import type { DiffSummary } from '../types';
+import type { DiffSummary, PlanItem } from '../types';
 import type { SkillMeta } from '../context/skills';
 import type { RuleMeta } from '../context/rules';
 import { convertImageBytes, convertMedia, mediaKind, type MediaOptions } from '../context/media';
@@ -58,6 +58,8 @@ export interface ToolContext {
   semantic?: { index: SemanticIndex; options: SemanticOptions };
   /** Headless browser session for the browser_* tools. */
   browser?: BrowserManager;
+  /** Publishes the agent's task plan to the UI (set_plan tool). */
+  setPlan?: (items: PlanItem[]) => void;
   memory?: {
     recall: (query: string | undefined, limit: number) => string;
     save: (title: string, summary: string, files: string[]) => string;
@@ -218,6 +220,8 @@ export async function executeTool(name: string, rawArgs: string, ctx: ToolContex
       return browserScreenshot(ctx);
     case 'browser_close':
       return browserTool(ctx, (b) => b.close());
+    case 'set_plan':
+      return setPlan(ctx, args.items);
     case 'recall_memory':
       return recallMemory(ctx, args.query ? String(args.query) : undefined, Number(args.limit) || 5);
     case 'save_memory':
@@ -1011,6 +1015,31 @@ async function browserScreenshot(ctx: ToolContext): Promise<ToolOutcome> {
   } catch (e) {
     return { ok: false, content: errMessage(e) };
   }
+}
+
+function setPlan(ctx: ToolContext, raw: unknown): ToolOutcome {
+  if (!ctx.setPlan) {
+    return { ok: false, content: 'Plan display is not available in this context.' };
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { ok: false, content: 'items must be a non-empty array of { text, status }.' };
+  }
+  const items: PlanItem[] = [];
+  for (const entry of raw.slice(0, 20)) {
+    const rec = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+    const text = typeof rec.text === 'string' ? rec.text.trim() : typeof entry === 'string' ? entry : '';
+    if (!text) {
+      continue;
+    }
+    const status = rec.status === 'active' || rec.status === 'done' ? rec.status : 'pending';
+    items.push({ text: text.slice(0, 160), status });
+  }
+  if (items.length === 0) {
+    return { ok: false, content: 'No valid plan items found.' };
+  }
+  ctx.setPlan(items);
+  const done = items.filter((i) => i.status === 'done').length;
+  return { ok: true, content: `Plan updated: ${done}/${items.length} done.` };
 }
 
 function recallMemory(ctx: ToolContext, query: string | undefined, limit: number): ToolOutcome {

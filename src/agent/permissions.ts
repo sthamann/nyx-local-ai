@@ -14,6 +14,7 @@ const DEFAULTS: Record<string, PermissionPolicy> = {
   read_rule: 'allow',
   use_skill: 'allow',
   ask_user: 'allow',
+  set_plan: 'allow',
   check_process: 'allow',
   kill_process: 'allow',
   browser_snapshot: 'allow',
