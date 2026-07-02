@@ -1,0 +1,407 @@
+{
+  "name": "nyx-local-ai",
+  "displayName": "Nyx — Local AI",
+  "description": "A local-first AI coding agent sidebar. Auto-detects Ollama & LM Studio models. No account, no cloud.",
+  "version": "0.24.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nyx",
+          "title": "Nyx",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nyx": [
+        {
+          "type": "webview",
+          "id": "nyx.chatView",
+          "name": "Nyx"
+        },
+        {
+          "id": "nyx.dropZone",
+          "name": "Attach files (drop here)",
+          "icon": "$(cloud-upload)",
+          "initialSize": 1,
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nyx.newChat",
+        "title": "New Chat",
+        "category": "Nyx",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nyx.refreshModels",
+        "title": "Refresh Local Models",
+        "category": "Nyx",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nyx.moveToRight",
+        "title": "Move Nyx to the Right Side Bar",
+        "category": "Nyx",
+        "icon": "$(layout-sidebar-right)"
+      },
+      {
+        "command": "nyx.attachToNyx",
+        "title": "Add to Nyx context",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.attachActiveFile",
+        "title": "Attach Active File to Nyx",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.attachSelection",
+        "title": "Add Selection to Nyx",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.pickAttachments",
+        "title": "Attach Files or Folders…",
+        "category": "Nyx",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nyx.show",
+        "title": "Show Panel",
+        "category": "Nyx",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "nyx.resetLocation",
+        "title": "Reset Panel Location (fix hidden/disappeared panel)",
+        "category": "Nyx",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "nyx.buildIndex",
+        "title": "Build/Update Semantic Index",
+        "category": "Nyx",
+        "icon": "$(database)"
+      },
+      {
+        "command": "nyx.rebuildIndex",
+        "title": "Rebuild Semantic Index from Scratch",
+        "category": "Nyx"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "nyx.show",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n"
+      },
+      {
+        "command": "nyx.newChat",
+        "key": "ctrl+alt+shift+n",
+        "mac": "cmd+alt+shift+n"
+      },
+      {
+        "command": "nyx.attachSelection",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "nyx.newChat",
+          "when": "view == nyx.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nyx.refreshModels",
+          "when": "view == nyx.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nyx.moveToRight",
+          "when": "view == nyx.chatView",
+          "group": "navigation@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "nyx.attachToNyx",
+          "group": "9_nyx"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "nyx.attachToNyx",
+          "group": "9_nyx"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "nyx.attachSelection",
+          "when": "editorHasSelection",
+          "group": "9_nyx"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Nyx",
+      "properties": {
+        "nyx.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL of your Ollama server."
+        },
+        "nyx.lmStudioUrl": {
+          "type": "string",
+          "default": "http://localhost:1234",
+          "description": "Base URL of your LM Studio server."
+        },
+        "nyx.customEndpoints": {
+          "type": "array",
+          "default": [],
+          "description": "Legacy: additional OpenAI-compatible endpoints. Prefer the in-sidebar 'Manage models' UI (nyx.machines).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Label shown next to the model, e.g. '2x DGX Spark'."
+              },
+              "url": {
+                "type": "string",
+                "description": "OpenAI-compatible base URL ending in /v1."
+              },
+              "apiKey": {
+                "type": "string",
+                "description": "Optional bearer token."
+              }
+            }
+          }
+        },
+        "nyx.machines": {
+          "type": "array",
+          "default": [],
+          "description": "Machines (labeled endpoints) that serve models. Managed via the Nyx 'Manage models' screen in the sidebar.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name, e.g. '2x DGX Spark Cluster'."
+              },
+              "hardware": {
+                "type": "string",
+                "description": "Optional hardware descriptor."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ollama",
+                  "lmstudio",
+                  "openai"
+                ]
+              },
+              "url": {
+                "type": "string",
+                "description": "Host or base URL, e.g. http://192.168.1.50:11434."
+              },
+              "apiKey": {
+                "type": "string",
+                "description": "Deprecated: keys entered here are migrated into the editor's secret storage on first use."
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "numCtx": {
+                "type": "number"
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "alias": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "nyx.toolPermissions": {
+          "type": "object",
+          "default": {},
+          "description": "Per-tool permissions: map a tool name (read_file, list_dir, search_files, find_files, get_diagnostics, fetch_url, web_search, write_file, edit_file, delete_file, rename_file, run_command, run_script, …) to 'allow', 'ask' or 'deny'. Use 'mcp:<server>' for an MCP server and '*' as a fallback. Defaults: reads/search allowed; edits, run_command and run_script ask.",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "ask",
+              "deny"
+            ]
+          }
+        },
+        "nyx.maxAgentSteps": {
+          "type": "number",
+          "default": 25,
+          "description": "Maximum number of tool iterations the agent may take per task. A Continue button appears when the limit is reached."
+        },
+        "nyx.toolProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "full",
+            "reduced"
+          ],
+          "default": "auto",
+          "description": "Which tool set to offer the model. 'reduced' exposes only the core tools (better for ~7B models); 'auto' picks based on the model size in its name."
+        },
+        "nyx.semanticIndexEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the local semantic code index (embeddings via a local Ollama model) powering the semantic_search tool."
+        },
+        "nyx.embeddingModel": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Local embedding model for the semantic index (pulled automatically via Ollama on first use)."
+        },
+        "nyx.embeddingOllamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama host that serves the embedding model."
+        },
+        "nyx.mcpEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Connect to MCP servers from ~/.cursor/mcp.json, .cursor/mcp.json and nyx.mcpServers, and offer their tools to the agent."
+        },
+        "nyx.mcpServers": {
+          "type": "object",
+          "default": {},
+          "description": "Additional MCP servers (same shape as Cursor's mcp.json): { \"name\": { \"command\": \"...\", \"args\": [], \"env\": {} } } or { \"name\": { \"url\": \"http://...\" } }.",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "nyx.maxOutputTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Hard cap per generation (max_tokens). Prevents runaway outputs from freezing the editor; set 0 to disable."
+        },
+        "nyx.allowPrivateNetworkFetch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the fetch_url tool to reach localhost / private-network addresses (SSRF guard is on by default)."
+        },
+        "nyx.contextTokens": {
+          "type": "number",
+          "default": 16384,
+          "description": "Assumed context window (in tokens) when a machine has no context length set. Used to trigger automatic compaction."
+        },
+        "nyx.compactThreshold": {
+          "type": "number",
+          "default": 0.75,
+          "minimum": 0.3,
+          "maximum": 0.95,
+          "description": "Fraction of the context budget that triggers automatic compaction of older turns."
+        },
+        "nyx.visionModel": {
+          "type": "string",
+          "default": "moondream",
+          "description": "Local vision model used to describe images for non-vision agents. Auto-pulled via Ollama on first use. Smallest reliable option is 'moondream'; for the tiniest footprint try an 'hf.co/…-GGUF' model."
+        },
+        "nyx.visionOllamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama host that runs (and, if needed, downloads) the vision model."
+        },
+        "nyx.autoInstallVisionModel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically download the vision model on first use if it is not installed."
+        },
+        "nyx.enableOcr": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run offline OCR (tesseract.js) on images in addition to the vision-model description."
+        },
+        "nyx.autoTitle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically name each chat with a short model-generated title after the first exchange."
+        },
+        "nyx.autoFetchUrls": {
+          "type": "boolean",
+          "default": true,
+          "description": "When your message contains http(s) URLs, automatically fetch each page (readable text plus described images) and add it to the agent's context."
+        },
+        "nyx.memoryEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remember key outcomes of past sessions (per project) and make them available to new agent sessions."
+        },
+        "nyx.memoryInject": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 20,
+          "description": "How many recent memory entries to inject into a new session's system prompt. The agent can recall more via the recall_memory tool."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package --allow-missing-repository --baseImagesUrl https://raw.githubusercontent.com/stefanhamann/nyx-local-ai/main"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.84.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "highlight.js": "^11.11.1",
+    "marked": "^15.0.0",
+    "typescript": "^5.7.0",
+    "unpdf": "^1.6.2"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
+  }
+}
