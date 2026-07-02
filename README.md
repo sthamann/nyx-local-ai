@@ -408,7 +408,7 @@ Several layers protect your files:
 `run_script(language, code)` writes a script to a temp directory, runs it in the workspace root, returns stdout/stderr, and deletes it — so quick tests and verifications never clutter your project. Supports `bash`, `sh`, `zsh`, `python`, `node`.
 
 ### Context management & compaction
-A **Context %** meter shows how full the model's context window is — using the machine's configured context length, the model's advertised size (a 1M model shows a 1M budget), or `nyx.contextTokens` as fallback. When it crosses `nyx.compactThreshold` (default 75%), Nyx summarizes older turns and keeps recent ones verbatim. Click the meter to compact on demand. `nyx.maxOutputTokens` (default 8192) caps each single generation so a runaway model can't flood the session.
+A **Context %** meter shows how full the model's context window is — using the machine's configured context length, the model's advertised size (a 1M model shows a 1M budget), or `nyx.contextTokens` as fallback. **Click the meter for a breakdown** (system prompt vs. conversation vs. tool results) with a *Compact now* action. Space is reclaimed in two stages: at 60% of the budget, **old tool outputs are trimmed** (the last few stay verbatim — usually avoids the expensive step entirely); at `nyx.compactThreshold` (default 75%), older turns are summarized by the model. `nyx.maxOutputTokens` (default 8192) caps each single generation so a runaway model can't flood the session.
 
 ### Attachments
 Attach context for the next message via:

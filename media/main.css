@@ -2051,3 +2051,46 @@ select.nyx-inp {
   font-size: 10px;
   flex-shrink: 0;
 }
+
+/* ---- v0.26: context breakdown popup ---- */
+.nyx-ctx-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 8px;
+  right: 8px;
+  margin-bottom: 6px;
+  padding: 10px;
+  background: var(--vscode-dropdown-background, #232323);
+  border: 1px solid var(--vscode-dropdown-border, #3c3c3c);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+  font-size: 11px;
+}
+
+.nyx-ctx-popup-head {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.nyx-ctx-popup-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+  color: var(--nyx-muted);
+}
+
+.nyx-ctx-popup-tokens {
+  font-family: var(--nyx-mono);
+}
+
+.nyx-ctx-popup-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nyx-composer .nyx-subbar {
+  position: relative;
+}

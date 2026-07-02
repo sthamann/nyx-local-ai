@@ -223,6 +223,63 @@ export function renderContext(used: number, budget: number): void {
   contextEl.classList.toggle('high', pct >= 90);
 }
 
+// ---- Context breakdown popup ----
+
+function closeContextPopup(): void {
+  document.getElementById('nyx-ctx-popup')?.remove();
+}
+
+/** Shows what occupies the context window, with a compact-now action. */
+export function showContextDetail(parts: Array<{ label: string; tokens: number }>, total: number, budget: number): void {
+  closeContextPopup();
+  const popup = document.createElement('div');
+  popup.id = 'nyx-ctx-popup';
+  popup.className = 'nyx-ctx-popup';
+  popup.setAttribute('role', 'dialog');
+  popup.setAttribute('aria-label', 'Context usage breakdown');
+
+  const fmt = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const head = document.createElement('div');
+  head.className = 'nyx-ctx-popup-head';
+  head.textContent = `Context: ${fmt(total)} / ${fmt(budget)} tokens`;
+  popup.appendChild(head);
+
+  for (const part of parts) {
+    const row = document.createElement('div');
+    row.className = 'nyx-ctx-popup-row';
+    const label = document.createElement('span');
+    label.textContent = part.label;
+    const value = document.createElement('span');
+    value.className = 'nyx-ctx-popup-tokens';
+    const pct = total > 0 ? Math.round((part.tokens / Math.max(total, 1)) * 100) : 0;
+    value.textContent = `${fmt(part.tokens)} · ${pct}%`;
+    row.appendChild(label);
+    row.appendChild(value);
+    popup.appendChild(row);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'nyx-ctx-popup-actions';
+  const compactBtn = document.createElement('button');
+  compactBtn.type = 'button';
+  compactBtn.className = 'nyx-btn secondary';
+  compactBtn.textContent = 'Compact now';
+  compactBtn.addEventListener('click', () => {
+    closeContextPopup();
+    post({ type: 'compact' });
+  });
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'nyx-btn secondary';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', closeContextPopup);
+  actions.appendChild(compactBtn);
+  actions.appendChild(closeBtn);
+  popup.appendChild(actions);
+
+  (contextEl.parentElement ?? document.body).appendChild(popup);
+}
+
 // ---- @-mention autocomplete (#11) ----
 
 let mentionToken = 0;
@@ -461,7 +518,13 @@ export function initComposer(): void {
   });
   queueClear.addEventListener('click', () => post({ type: 'queueSet', items: [] }));
   attachBtn.addEventListener('click', () => post({ type: 'attachPick' }));
-  contextEl.addEventListener('click', () => post({ type: 'compact' }));
+  contextEl.addEventListener('click', () => {
+    if (document.getElementById('nyx-ctx-popup')) {
+      closeContextPopup();
+    } else {
+      post({ type: 'getContextDetail' });
+    }
+  });
 
   inputEl.addEventListener('input', () => {
     inputEl.style.height = 'auto';

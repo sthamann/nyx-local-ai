@@ -283,6 +283,55 @@ export class AgentSession {
     return estimateOf(this.messages);
   }
 
+  /** Token estimate per category, for the context breakdown UI. */
+  breakdown(): { system: number; conversation: number; toolResults: number } {
+    const tokensOf = (m: ChatMessage): number => {
+      let chars = messageText(m.content).length;
+      for (const t of m.tool_calls ?? []) {
+        chars += t.function.name.length + t.function.arguments.length;
+      }
+      return Math.ceil(chars / 4) + 4;
+    };
+    let system = 0;
+    let conversation = 0;
+    let toolResults = 0;
+    for (const m of this.messages) {
+      const tokens = tokensOf(m);
+      if (m.role === 'system') {
+        system += tokens;
+      } else if (m.role === 'tool') {
+        toolResults += tokens;
+      } else {
+        conversation += tokens;
+      }
+    }
+    return { system, conversation, toolResults };
+  }
+
+  /**
+   * Cheap first line of defense before full compaction: truncates OLD tool
+   * outputs (all but the most recent few) — they are usually the bulk of the
+   * context and rarely needed verbatim once acted upon.
+   */
+  private ageToolOutputs(): void {
+    const KEEP_FULL = 4;
+    const TRIM_TO = 600;
+    let seen = 0;
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i];
+      if (m.role !== 'tool' || typeof m.content !== 'string') {
+        continue;
+      }
+      seen++;
+      if (seen <= KEEP_FULL || m.content.length <= TRIM_TO + 200) {
+        continue;
+      }
+      m.content = `${m.content.slice(0, TRIM_TO)}\n… [older tool output trimmed to save context]`;
+    }
+    this.lastPromptTokens = undefined;
+    this.lastPromptMessageCount = 0;
+  }
+
   /**
    * Summarizes the older part of the conversation into a compact note and keeps
    * the most recent messages verbatim, so the session can continue indefinitely.
@@ -437,6 +486,11 @@ export class AgentSession {
     let allowCompact = true;
 
     for (let step = 0; step < steps; step++) {
+      // Age old tool outputs at 60% of the budget — often avoids the full
+      // (model-driven, slow) compaction entirely.
+      if (this.estimateTokens() > 0.6 * options.contextBudget) {
+        this.ageToolOutputs();
+      }
       if (allowCompact && this.estimateTokens() > compactLimit) {
         const before = this.estimateTokens();
         const compacted = await this.compact(options.compactModel ?? model, signal, cb.onStatus);

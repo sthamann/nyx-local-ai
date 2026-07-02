@@ -212,7 +212,9 @@ export type WebviewToHost =
   /** Stages the session's changed files and commits with a generated message. */
   | { type: 'commitChanges' }
   /** Runs the in-product benchmark against one model of a machine. */
-  | { type: 'benchmarkModel'; machineId: string; modelId: string };
+  | { type: 'benchmarkModel'; machineId: string; modelId: string }
+  /** Requests the context-usage breakdown for the popup. */
+  | { type: 'getContextDetail' };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -255,7 +257,9 @@ export type HostToWebview =
   /** All net file changes of this session vs. its checkpoints. */
   | { type: 'review'; files: ReviewFile[] }
   /** Stored benchmark scores per model key + optional just-finished/failed run. */
-  | { type: 'benchmarks'; entries: Record<string, BenchmarkScores>; runningKey?: string; error?: string };
+  | { type: 'benchmarks'; entries: Record<string, BenchmarkScores>; runningKey?: string; error?: string }
+  /** Token breakdown for the context popup. */
+  | { type: 'contextDetail'; parts: Array<{ label: string; tokens: number }>; total: number; budget: number };
 
 /** Scores of the in-product model benchmark (percentages; fp lower = better). */
 export interface BenchmarkScores {

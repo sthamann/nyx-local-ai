@@ -471,6 +471,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'benchmarkModel':
         await this.benchmarkModel(message.machineId, message.modelId);
         return;
+      case 'getContextDetail': {
+        const model = this.findModel(this.selectedKey) ?? this.models[0];
+        const breakdown = this.session.breakdown();
+        this.post({
+          type: 'contextDetail',
+          parts: [
+            { label: 'System prompt + rules/skills/memory', tokens: breakdown.system },
+            { label: 'Conversation (you + Nyx)', tokens: breakdown.conversation },
+            { label: 'Tool results', tokens: breakdown.toolResults },
+          ],
+          total: this.session.estimateTokens(),
+          budget: this.budgetFor(model),
+        });
+        return;
+      }
       default: {
         const exhaustive: never = message;
         void exhaustive;

@@ -57,6 +57,7 @@ import {
   setBusy,
   setComposerText,
   setMode,
+  showContextDetail,
 } from './composer';
 import { renderHistory, renderMemory, renderSessionTabs, updateChatTitle } from './history';
 import { isEditing, onBenchmarks, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
@@ -326,6 +327,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'benchmarks':
       onBenchmarks(message.entries, message.runningKey, message.error);
+      return;
+    case 'contextDetail':
+      showContextDetail(message.parts, message.total, message.budget);
       return;
     default: {
       const exhaustive: never = message;
