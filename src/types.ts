@@ -204,7 +204,13 @@ export type WebviewToHost =
   /** Changes the autonomy preset (safe | balanced | autopilot). */
   | { type: 'setAutonomy'; value: string }
   /** An image pasted from the clipboard into the composer. */
-  | { type: 'attachImage'; dataBase64: string; mime: string };
+  | { type: 'attachImage'; dataBase64: string; mime: string }
+  // Review-changes flow.
+  | { type: 'getReview' }
+  | { type: 'revertFile'; path: string }
+  | { type: 'revertAll' }
+  /** Stages the session's changed files and commits with a generated message. */
+  | { type: 'commitChanges' };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -243,4 +249,16 @@ export type HostToWebview =
   /** The agent's current task plan (empty array hides the card). */
   | { type: 'plan'; items: PlanItem[] }
   /** Host-side config the UI mirrors (autonomy preset). */
-  | { type: 'config'; autonomy: string };
+  | { type: 'config'; autonomy: string }
+  /** All net file changes of this session vs. its checkpoints. */
+  | { type: 'review'; files: ReviewFile[] };
+
+/** One changed file in the review view. */
+export interface ReviewFile {
+  path: string;
+  /** File did not exist at session start (was created by the agent). */
+  created: boolean;
+  /** File existed but was deleted. */
+  deleted: boolean;
+  diff: DiffSummary;
+}

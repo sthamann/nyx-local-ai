@@ -1961,3 +1961,76 @@ select.nyx-inp {
   flex-shrink: 0;
   font-size: 11px;
 }
+
+/* ---- v0.26: review changes ---- */
+.nyx-changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--nyx-border, rgba(255, 255, 255, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nyx-muted);
+  font-size: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nyx-changes:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--nyx-accent);
+}
+
+.nyx-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.nyx-review-file {
+  border: 1px solid var(--nyx-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.nyx-review-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--vscode-input-background, rgba(255, 255, 255, 0.03));
+}
+
+.nyx-review-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.nyx-review-new {
+  color: var(--vscode-charts-blue, #4aa3ff);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.nyx-review-revert {
+  padding: 1px 8px;
+  font-size: 10px;
+}
+
+.nyx-review-diff {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+}

@@ -445,6 +445,15 @@ While the agent is busy, pressing **Enter** queues your message instead of sendi
 ### File-edit diff cards & approval previews
 `write_file` / `edit_file` first show the **proposed diff in the approval card** — you approve what you can see, then it is applied via `WorkspaceEdit` (open editors and undo history stay intact). Applied edits render as cards showing the path, a `+added −removed` badge, and a colored diff preview; click the filename to open the file.
 
+### Review changes & one-click commit
+The **✎ N changed** chip next to the context meter opens the review view: the
+**net diff of the whole chat** (checkpoint originals vs. disk), one card per
+file with `+/−` badge, `new`/`deleted` markers, diff preview, and a
+**Revert** button per file (plus *Revert all*). **Commit** stages exactly the
+session's files, generates a conventional commit message from the staged diff
+with a local model, and commits (`git commit -F`, no shell-escaping issues) —
+the status line reports the short hash.
+
 ### Checkpoints (rewind & edit)
 Each user message starts a checkpoint. Hovering a message reveals **↩ Edit & rerun**: Nyx restores every file the agent changed after that point, rewinds the conversation, and places the original message in the composer for editing. After an error, a **Retry** button does the same and re-sends automatically. Checkpoints are persisted with the chat.
 

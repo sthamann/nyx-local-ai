@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { discoverModels, probeMachine } from '../models/discovery';
 import { MachineStore } from '../models/machines';
 import { AgentSession, generateSessionTitle } from '../agent/agent';
+import { streamChat, stripSpecialTokens } from '../models/client';
 import { CheckpointStore } from '../agent/checkpoints';
 import { MemoryStore } from '../agent/memory';
 import { ProcessManager } from '../agent/processes';
@@ -12,6 +13,7 @@ import { buildSkillsSection, loadSkills } from '../context/skills';
 import type { SkillMeta } from '../context/skills';
 import type { ToolContext, ToolProfile } from '../agent/tools';
 import { buildAttachmentContext, buildMentionContext, buildUrlContext } from './context';
+import { summarizeDiff } from '../agent/diff';
 import { SessionStore } from './SessionStore';
 import type { StoredSession } from './SessionStore';
 import { loadMcpConfigs, McpManager } from '../mcp/client';
@@ -19,7 +21,7 @@ import { BrowserManager, cleanupBrowserShots } from '../agent/browser';
 import { INCLUDE_GLOB, SemanticIndex } from '../context/semanticIndex';
 import type { SemanticOptions } from '../context/semanticIndex';
 import type { MediaOptions } from '../context/media';
-import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, PlanItem, QuestionType, WebviewToHost } from '../types';
+import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, PlanItem, QuestionType, ReviewFile, WebviewToHost } from '../types';
 
 const QUEUE_KEY = 'nyx.queue.v1';
 
@@ -435,6 +437,29 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'attachImage':
         await this.attachPastedImage(message.dataBase64, message.mime);
         return;
+      case 'getReview':
+        await this.postReview();
+        return;
+      case 'revertFile': {
+        const ok = await this.checkpoints.restoreFile(message.path, this.workspaceRoot());
+        this.post({ type: 'status', text: ok ? `Reverted ${message.path}.` : `Could not revert ${message.path}.` });
+        await this.postReview();
+        return;
+      }
+      case 'revertAll': {
+        let reverted = 0;
+        for (const [file] of this.checkpoints.originals()) {
+          if (await this.checkpoints.restoreFile(file, this.workspaceRoot())) {
+            reverted++;
+          }
+        }
+        this.post({ type: 'status', text: `Reverted ${reverted} file(s) to the session start.` });
+        await this.postReview();
+        return;
+      }
+      case 'commitChanges':
+        await this.commitSessionChanges();
+        return;
       default: {
         const exhaustive: never = message;
         void exhaustive;
@@ -765,6 +790,108 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (this.lastUserText) {
       await this.onSend(this.lastUserText, this.currentModelKey ?? this.selectedKey ?? '', this.currentMode ?? 'agent');
     }
+  }
+
+  /**
+   * Stages the session's changed files and commits them with a model-generated
+   * conventional commit message (written via `git commit -F` — no shell
+   * escaping pitfalls).
+   */
+  private async commitSessionChanges(): Promise<void> {
+    const root = this.workspaceRoot();
+    const files = [...this.checkpoints.originals().keys()];
+    try {
+      if (!root) {
+        throw new Error('No workspace folder is open.');
+      }
+      if (files.length === 0) {
+        throw new Error('No session changes to commit.');
+      }
+      const cwd = root.fsPath;
+      const run = async (command: string, failMsg: string): Promise<string> => {
+        const result = await this.processes.run(command, { cwd, timeoutMs: 30000 });
+        if (!result.ok) {
+          throw new Error(`${failMsg}: ${result.output.trim().slice(0, 200)}`);
+        }
+        return result.output;
+      };
+      await run('git rev-parse --is-inside-work-tree', 'Not a git repository');
+      const quoted = files.map((f) => `"${f.replace(/"/g, '\\"')}"`).join(' ');
+      await run(`git add -A -- ${quoted}`, 'git add failed');
+      const diff = (await run('git diff --cached', 'git diff failed')).slice(0, 9000);
+      if (!diff.trim()) {
+        throw new Error('Nothing staged — the changes may already be committed.');
+      }
+
+      this.post({ type: 'status', text: 'Generating commit message…' });
+      const model = this.utilityModel() ?? this.findModel(this.selectedKey) ?? this.models[0];
+      if (!model) {
+        throw new Error('No model available to generate the commit message.');
+      }
+      const result = await streamChat(
+        {
+          endpoint: model.endpoint,
+          apiKey: model.apiKey,
+          model: model.id,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Write a git commit message for the staged diff: one imperative summary line (max 70 chars, conventional-commit style like "fix:", "feat:", "refactor:"), optionally followed by a blank line and 1-3 short body lines. Reply with ONLY the message — no quotes, no markdown fences.',
+            },
+            { role: 'user', content: `Staged diff:\n\n${diff}` },
+          ],
+          temperature: 0,
+          maxTokens: 200,
+          signal: AbortSignal.timeout(60000),
+        },
+        { onDelta: () => {} },
+      );
+      const message = stripSpecialTokens(result.content).trim().replace(/^```[a-z]*\n?|```$/g, '').trim();
+      if (!message) {
+        throw new Error('The model produced an empty commit message.');
+      }
+      const msgFile = vscode.Uri.joinPath(this.context.globalStorageUri, 'commit-msg.txt');
+      await vscode.workspace.fs.writeFile(msgFile, new TextEncoder().encode(message));
+      await run(`git commit -F "${msgFile.fsPath}"`, 'git commit failed');
+      const hash = (await run('git rev-parse --short HEAD', 'git rev-parse failed')).trim();
+      this.post({ type: 'status', text: `Committed ${files.length} file(s) as ${hash}: ${message.split('\n')[0]}` });
+    } catch (e) {
+      this.post({ type: 'error', text: `Commit failed: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      await this.postReview();
+    }
+  }
+
+  /** The model used for utility work (titles, summaries, commit messages). */
+  private utilityModel(): ModelInfo | undefined {
+    return undefined; // smart routing lands with the utility-model feature
+  }
+
+  /** Builds the net session diff: checkpoint originals vs. current disk state. */
+  private async postReview(): Promise<void> {
+    const root = this.workspaceRoot();
+    const files: ReviewFile[] = [];
+    for (const [relPath, original] of this.checkpoints.originals()) {
+      const uri = relPath.startsWith('/') || !root ? vscode.Uri.file(relPath) : vscode.Uri.joinPath(root, relPath);
+      let current: string | undefined;
+      try {
+        current = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+      } catch {
+        current = undefined;
+      }
+      if (current === original) {
+        continue; // reverted or untouched — no net change
+      }
+      files.push({
+        path: relPath,
+        created: original === undefined,
+        deleted: original !== undefined && current === undefined,
+        diff: summarizeDiff(original, current ?? ''),
+      });
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    this.post({ type: 'review', files });
   }
 
   private recomputeEditStats(): void {

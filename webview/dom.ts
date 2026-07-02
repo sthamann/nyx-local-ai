@@ -41,6 +41,7 @@ app.innerHTML = `
           <span class="nyx-context-bar"><span class="nyx-context-fill" id="nyx-context-fill"></span></span>
           <span class="nyx-context-label" id="nyx-context-label"></span>
         </button>
+        <button class="nyx-changes" id="nyx-changes" type="button" hidden title="Review all file changes of this chat">&#9998; <span id="nyx-changes-count"></span></button>
         <span class="nyx-speed" id="nyx-speed" hidden title="Generation speed (tokens per second)"></span>
       </div>
       <div class="nyx-attachments" id="nyx-attachments"></div>
@@ -74,6 +75,16 @@ app.innerHTML = `
       <button id="nyx-mem-clear" class="nyx-icon-btn" type="button" title="Clear all memories">Clear all</button>
     </div>
     <div class="nyx-mem-list" id="nyx-mem-list"></div>
+  </div>
+  <div id="nyx-review" class="nyx-view" hidden>
+    <div class="nyx-mm-head">
+      <button id="nyx-review-back" class="nyx-icon-btn" type="button">&#8249; Back</button>
+      <span class="nyx-mem-title">Review changes</span>
+      <span class="nyx-spacer"></span>
+      <button id="nyx-review-commit" class="nyx-icon-btn nyx-new" type="button" title="Stage the changes and commit with a generated message">Commit</button>
+      <button id="nyx-review-revertall" class="nyx-icon-btn" type="button" title="Revert every file to the session start">Revert all</button>
+    </div>
+    <div class="nyx-review-list" id="nyx-review-list"></div>
   </div>
   <div id="nyx-machines" class="nyx-view" hidden>
     <div class="nyx-mm-head">
@@ -138,6 +149,13 @@ export const planEl = el<HTMLDivElement>('nyx-plan');
 export const sessionTabsEl = el<HTMLDivElement>('nyx-session-tabs');
 export const tabsToggleBtn = el<HTMLButtonElement>('nyx-tabs-toggle');
 export const autonomySelect = el<HTMLSelectElement>('nyx-autonomy');
+export const changesBtn = el<HTMLButtonElement>('nyx-changes');
+export const changesCount = el<HTMLElement>('nyx-changes-count');
+export const reviewView = el<HTMLDivElement>('nyx-review');
+export const reviewList = el<HTMLDivElement>('nyx-review-list');
+export const reviewBackBtn = el<HTMLButtonElement>('nyx-review-back');
+export const reviewCommitBtn = el<HTMLButtonElement>('nyx-review-commit');
+export const reviewRevertAllBtn = el<HTMLButtonElement>('nyx-review-revertall');
 export const dropOverlay = el<HTMLDivElement>('nyx-drop');
 export const dropSub = el<HTMLElement>('nyx-drop-sub');
 
@@ -157,13 +175,14 @@ export function scrollToBottom(force = false): void {
   }
 }
 
-export type ViewName = 'chat' | 'history' | 'machines' | 'memory';
+export type ViewName = 'chat' | 'history' | 'machines' | 'memory' | 'review';
 
 export function showView(view: ViewName): void {
   chatView.hidden = view !== 'chat';
   historyView.hidden = view !== 'history';
   machinesView.hidden = view !== 'machines';
   memoryView.hidden = view !== 'memory';
+  reviewView.hidden = view !== 'review';
 }
 
 export function relativeTime(ts: number): string {

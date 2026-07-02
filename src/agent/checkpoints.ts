@@ -81,6 +81,38 @@ export class CheckpointStore {
     return { restored, messageIndex };
   }
 
+  /** Oldest captured original per file across ALL checkpoints of the session. */
+  originals(): Map<string, string | undefined> {
+    const out = new Map<string, string | undefined>();
+    for (let i = this.checkpoints.length - 1; i >= 0; i--) {
+      for (const [file, content] of this.checkpoints[i].files) {
+        out.set(file, content);
+      }
+    }
+    return out;
+  }
+
+  /** Restores a single file to its session-start state (delete if it didn't exist). */
+  async restoreFile(relPath: string, root: vscode.Uri | undefined): Promise<boolean> {
+    const originals = this.originals();
+    if (!originals.has(relPath)) {
+      return false;
+    }
+    const content = originals.get(relPath);
+    const uri = relPath.startsWith('/') || !root ? vscode.Uri.file(relPath) : vscode.Uri.joinPath(root, relPath);
+    try {
+      if (content === undefined) {
+        await vscode.workspace.fs.delete(uri, { useTrash: true });
+      } else {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, '..'));
+        await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   clear(): void {
     this.checkpoints = [];
     this.active = undefined;

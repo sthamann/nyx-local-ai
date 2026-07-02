@@ -60,6 +60,7 @@ import {
 } from './composer';
 import { renderHistory, renderMemory, renderSessionTabs, updateChatTitle } from './history';
 import { isEditing, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
+import { initReview, renderReview, updateChangesChip } from './review';
 
 /** Capability badges shown next to the model name in the picker (#19). */
 function modelBadges(m: ModelInfo): string {
@@ -180,6 +181,7 @@ mmBackBtn.addEventListener('click', () => {
 mmAddBtn.addEventListener('click', () => startAdd());
 
 initComposer();
+initReview();
 
 // ---- Host → webview dispatcher ----
 
@@ -267,6 +269,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       S.currentSessionId = message.currentId;
       updateChatTitle();
       renderSessionTabs();
+      updateChangesChip();
       if (!historyView.hidden) {
         renderHistory();
       }
@@ -317,6 +320,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'config':
       autonomySelect.value = message.autonomy;
+      return;
+    case 'review':
+      renderReview(message.files);
       return;
     default: {
       const exhaustive: never = message;
