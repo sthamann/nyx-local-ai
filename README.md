@@ -321,6 +321,12 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `search_files` | Regex content search | allow |
 | `semantic_search` | Meaning-based code search (local embedding index) | allow |
 | `find_files` | Fuzzy filename / glob search | allow |
+| `file_outline` | Class/function outline with line ranges (language server) | allow |
+| `find_symbol` | Workspace-wide symbol search (language server) | allow |
+| `find_references` | All references to a symbol (language server) | allow |
+| `format_file` | Run the configured formatter on a file | allow |
+| `http_request` | GET/POST/… against local APIs & dev servers | ask |
+| `wait` | Pause up to 30 s (dev-server boot etc.) | allow |
 | `get_diagnostics` | Linter/compiler errors & warnings | allow |
 | `fetch_url` | Fetch text of an http(s) URL | allow |
 | `web_search` | Search the web (DuckDuckGo) | allow |

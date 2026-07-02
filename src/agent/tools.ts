@@ -186,6 +186,18 @@ export async function executeTool(name: string, rawArgs: string, ctx: ToolContex
       return semanticSearch(ctx, String(args.query ?? ''), Number(args.limit) || 8);
     case 'find_files':
       return findFiles(ctx, String(args.query ?? ''));
+    case 'file_outline':
+      return fileOutline(ctx, String(args.path ?? ''));
+    case 'find_symbol':
+      return findSymbol(String(args.query ?? ''));
+    case 'find_references':
+      return findReferences(ctx, String(args.path ?? ''), String(args.symbol ?? ''));
+    case 'format_file':
+      return formatFile(ctx, String(args.path ?? ''));
+    case 'http_request':
+      return httpRequest(ctx, String(args.method ?? 'GET'), String(args.url ?? ''), args.headers, args.body === undefined ? undefined : String(args.body));
+    case 'wait':
+      return waitSeconds(ctx, Number(args.seconds) || 1);
     case 'write_file':
       return writeFile(ctx, String(args.path ?? ''), String(args.content ?? ''));
     case 'edit_file':
@@ -299,6 +311,176 @@ async function listDir(ctx: ToolContext, p: string): Promise<ToolOutcome> {
   } catch (e) {
     return { ok: false, content: errMessage(e) };
   }
+}
+
+// ---- Language-server powered navigation ----
+
+function symbolKindName(kind: vscode.SymbolKind): string {
+  return vscode.SymbolKind[kind]?.toLowerCase() ?? 'symbol';
+}
+
+async function fileOutline(ctx: ToolContext, p: string): Promise<ToolOutcome> {
+  try {
+    const uri = await resolvePath(ctx, p);
+    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
+      'vscode.executeDocumentSymbolProvider',
+      uri,
+    );
+    if (!symbols || symbols.length === 0) {
+      return { ok: true, content: 'No symbols found (no language support for this file, or it is empty).' };
+    }
+    const lines: string[] = [];
+    const walk = (items: vscode.DocumentSymbol[], depth: number): void => {
+      for (const s of items) {
+        lines.push(`${'  '.repeat(depth)}${symbolKindName(s.kind)} ${s.name}  [${s.range.start.line + 1}-${s.range.end.line + 1}]`);
+        if (s.children.length > 0 && depth < 3) {
+          walk(s.children, depth + 1);
+        }
+      }
+    };
+    walk(symbols, 0);
+    return { ok: true, content: truncate(lines.join('\n')) };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+async function findSymbol(query: string): Promise<ToolOutcome> {
+  if (!query.trim()) {
+    return { ok: false, content: 'Empty query.' };
+  }
+  try {
+    const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[] | undefined>(
+      'vscode.executeWorkspaceSymbolProvider',
+      query,
+    );
+    if (!symbols || symbols.length === 0) {
+      return { ok: true, content: `No workspace symbols match "${query}". Try search_files for plain text.` };
+    }
+    const lines = symbols
+      .slice(0, 30)
+      .map((s) => `${symbolKindName(s.kind)} ${s.name}${s.containerName ? ` (in ${s.containerName})` : ''} — ${vscode.workspace.asRelativePath(s.location.uri)}:${s.location.range.start.line + 1}`);
+    return { ok: true, content: truncate(lines.join('\n')) };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+async function findReferences(ctx: ToolContext, p: string, symbol: string): Promise<ToolOutcome> {
+  if (!symbol.trim()) {
+    return { ok: false, content: 'symbol must not be empty.' };
+  }
+  try {
+    const uri = await resolvePath(ctx, p);
+    const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    const offset = text.indexOf(symbol);
+    if (offset < 0) {
+      return { ok: false, content: `"${symbol}" does not occur in ${p}.` };
+    }
+    const before = text.slice(0, offset);
+    const line = before.split('\n').length - 1;
+    const character = offset - (before.lastIndexOf('\n') + 1);
+    const refs = await vscode.commands.executeCommand<vscode.Location[] | undefined>(
+      'vscode.executeReferenceProvider',
+      uri,
+      new vscode.Position(line, character),
+    );
+    if (!refs || refs.length === 0) {
+      return { ok: true, content: `No references found for "${symbol}" (language support may be limited).` };
+    }
+    const lines = refs
+      .slice(0, 50)
+      .map((r) => `${vscode.workspace.asRelativePath(r.uri)}:${r.range.start.line + 1}`);
+    return { ok: true, content: truncate(`${refs.length} reference(s) to "${symbol}":\n${lines.join('\n')}`) };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+async function formatFile(ctx: ToolContext, p: string): Promise<ToolOutcome> {
+  try {
+    const uri = await resolvePath(ctx, p);
+    const edits = await vscode.commands.executeCommand<vscode.TextEdit[] | undefined>(
+      'vscode.executeFormatDocumentProvider',
+      uri,
+      { tabSize: 2, insertSpaces: true },
+    );
+    if (!edits || edits.length === 0) {
+      return { ok: true, content: `${p} is already formatted (or no formatter is configured).` };
+    }
+    const edit = new vscode.WorkspaceEdit();
+    edit.set(uri, edits);
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await doc.save();
+    }
+    return applied
+      ? { ok: true, content: `Formatted ${p} (${edits.length} edit(s)).`, filePath: p }
+      : { ok: false, content: `Formatter edits could not be applied to ${p}.` };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  }
+}
+
+// ---- Dev-loop helpers ----
+
+async function httpRequest(ctx: ToolContext, method: string, url: string, headers: unknown, body?: string): Promise<ToolOutcome> {
+  const verb = method.toUpperCase();
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(verb)) {
+    return { ok: false, content: `Unsupported method ${method}.` };
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    return { ok: false, content: 'Only http(s) URLs are allowed.' };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  const onAbort = (): void => controller.abort();
+  ctx.signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    const headerMap: Record<string, string> = {};
+    if (headers && typeof headers === 'object') {
+      for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
+        headerMap[k] = String(v);
+      }
+    }
+    const res = await fetch(url, {
+      method: verb,
+      headers: headerMap,
+      body: verb === 'GET' || verb === 'HEAD' ? undefined : body,
+      signal: controller.signal,
+    });
+    const responseHeaders = ['content-type', 'location', 'content-length']
+      .map((h) => (res.headers.get(h) ? `${h}: ${res.headers.get(h)}` : undefined))
+      .filter(Boolean)
+      .join('\n');
+    const text = verb === 'HEAD' ? '' : await res.text();
+    return {
+      ok: true,
+      content: `HTTP ${res.status} ${res.statusText}\n${responseHeaders}\n\n${truncate(text, 12000)}`,
+    };
+  } catch (e) {
+    return { ok: false, content: errMessage(e) };
+  } finally {
+    clearTimeout(timer);
+    ctx.signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+async function waitSeconds(ctx: ToolContext, seconds: number): Promise<ToolOutcome> {
+  const clamped = Math.min(30, Math.max(1, Math.round(seconds)));
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, clamped * 1000);
+    ctx.signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+  return { ok: true, content: `Waited ${clamped}s.` };
 }
 
 // ---- Content search: ripgrep first (fast), JS fallback ----

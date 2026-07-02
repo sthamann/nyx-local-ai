@@ -81,6 +81,88 @@ export const toolSchemas: ToolSchema[] = [
   {
     type: 'function',
     function: {
+      name: 'file_outline',
+      description:
+        'Structural outline of a file (classes, functions, methods with line ranges) from the language server — much cheaper than reading a big file to find one function.',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Path relative to the workspace root.' } },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_symbol',
+      description: 'Find a class/function/method by name across the workspace (language-server symbol search). Returns definition locations.',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'Symbol name or prefix, e.g. "resolvePolicy".' } },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_references',
+      description: 'Find all references to a symbol (language-server powered): who calls/uses it, across the workspace.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File that contains the symbol.' },
+          symbol: { type: 'string', description: 'The exact symbol name as written in that file.' },
+        },
+        required: ['path', 'symbol'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'format_file',
+      description: "Format a file with the workspace's configured formatter (fix indentation/style after edits).",
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Path relative to the workspace root.' } },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'http_request',
+      description:
+        'Send an HTTP request (GET/POST/PUT/PATCH/DELETE/HEAD) — for testing local dev servers and APIs. Returns status, headers, and body.',
+      parameters: {
+        type: 'object',
+        properties: {
+          method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], description: 'HTTP method.' },
+          url: { type: 'string', description: 'http(s) URL, localhost allowed.' },
+          headers: { type: 'object', description: 'Optional request headers.' },
+          body: { type: 'string', description: 'Optional request body (e.g. JSON).' },
+        },
+        required: ['method', 'url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'wait',
+      description: 'Pause for a few seconds (max 30) — e.g. to let a dev server boot before an http_request or browser_snapshot.',
+      parameters: {
+        type: 'object',
+        properties: { seconds: { type: 'number', description: 'Seconds to wait (1–30).' } },
+        required: ['seconds'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'write_file',
       description: 'Create or overwrite a file with the given full content. Shows a diff for existing files.',
       parameters: {

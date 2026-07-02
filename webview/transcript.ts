@@ -139,6 +139,12 @@ const TOOL_ICONS: Record<string, string> = {
   search_files: '\u{1F50D}',
   semantic_search: '\u{1F9ED}',
   find_files: '\u{1F50E}',
+  file_outline: '\u{1F5C2}',
+  find_symbol: '\u{1F3AF}',
+  find_references: '\u{1F517}',
+  format_file: '\u{1FA84}',
+  http_request: '\u{1F4E1}',
+  wait: '\u23F3',
   write_file: '\u270F\uFE0F',
   edit_file: '\u270F\uFE0F',
   delete_file: '\u{1F5D1}\uFE0F',
@@ -169,6 +175,12 @@ export const TOOL_VERBS: Record<string, string> = {
   search_files: 'Searched',
   semantic_search: 'Searched semantically',
   find_files: 'Searched files',
+  file_outline: 'Outlined',
+  find_symbol: 'Found symbol',
+  find_references: 'Found references',
+  format_file: 'Formatted',
+  http_request: 'HTTP',
+  wait: 'Waited',
   write_file: 'Created',
   edit_file: 'Edited',
   delete_file: 'Deleted',
@@ -199,8 +211,17 @@ export function summarizeArgs(name: string, rawArgs: string): string {
     if (name === 'run_command') {
       return String(args.command ?? '');
     }
-    if (name === 'search_files' || name === 'semantic_search' || name === 'find_files' || name === 'web_search' || name === 'recall_memory') {
+    if (name === 'search_files' || name === 'semantic_search' || name === 'find_files' || name === 'web_search' || name === 'recall_memory' || name === 'find_symbol') {
       return String(args.query ?? '');
+    }
+    if (name === 'find_references') {
+      return String(args.symbol ?? '');
+    }
+    if (name === 'http_request') {
+      return `${String(args.method ?? 'GET')} ${String(args.url ?? '')}`.slice(0, 80);
+    }
+    if (name === 'wait') {
+      return `${String(args.seconds ?? '?')}s`;
     }
     if (name.startsWith('mcp_')) {
       const firstString = Object.values(args).find((v) => typeof v === 'string');
@@ -239,7 +260,7 @@ function prettyArgs(rawArgs: string): string {
 }
 
 /** Tools whose argument is a workspace path — shown as a bare filename for brevity. */
-const PATH_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'delete_file', 'list_dir', 'read_rule', 'get_diagnostics']);
+const PATH_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'delete_file', 'list_dir', 'read_rule', 'get_diagnostics', 'file_outline', 'format_file']);
 
 function basename(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean);
