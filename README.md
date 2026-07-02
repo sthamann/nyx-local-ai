@@ -3,6 +3,12 @@
 **Feels like Cursor. Runs entirely on your hardware. Costs nothing per token.**
 
 <p align="center">
+  <a href="docs/nyx-promo.mp4"><img src="docs/nyx-promo.gif" width="720" alt="30-second promo: Nyx runs an agent locally, shows diff approvals, manages an inference fleet, and installs with one curl command" /></a>
+  <br />
+  <sub><b>Nyx in 30 seconds</b> — click for the <a href="docs/nyx-promo.mp4">MP4 version</a></sub>
+</p>
+
+<p align="center">
   <img src="docs/nyx-agent-run.png" width="440" alt="Nyx agent run: thinking block, semantic search, an applied diff card on permissions.ts, a syntax-highlighted answer, and a 1M-token context meter at 4%" />
 </p>
 
@@ -792,6 +798,7 @@ webview/                  # sidebar UI, split into modules
   history.ts, machines.ts, markdown.ts, dom.ts, state.ts
 media/main.css            # theme-aware styles
 .harness/                 # dev helpers (smoke.mjs: logic smoke tests)
+promo/                    # HyperFrames source of the 30-second promo video
 ```
 
 ## License

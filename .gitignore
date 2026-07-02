@@ -48,3 +48,10 @@ Thumbs.db
 # Cache
 .cache/
 .eslintcache
+
+# Promo video build artifacts (final MP4/GIF live in docs/)
+promo/renders/
+promo/.hyperframes/
+promo/*.mp4
+promo/*.gif
+promo/frame_*.png

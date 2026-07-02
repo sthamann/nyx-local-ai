@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0e0f13;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        color: #eaeaea;
+      }
+
+      /* ---------- shared scenery ---------- */
+      .bg {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(1400px 900px at 26% 8%, #22283a 0%, #14161d 52%, #0e0f13 100%);
+      }
+      .stars {
+        position: absolute;
+        inset: 0;
+        background-image:
+          radial-gradient(1.6px 1.6px at 240px 180px, rgba(234, 234, 234, 0.8) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.2px 1.2px at 620px 90px, rgba(234, 234, 234, 0.55) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(2px 2px at 1100px 240px, rgba(234, 234, 234, 0.7) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.4px 1.4px at 1540px 130px, rgba(234, 234, 234, 0.6) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.2px 1.2px at 1750px 420px, rgba(234, 234, 234, 0.5) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.6px 1.6px at 420px 560px, rgba(234, 234, 234, 0.45) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.2px 1.2px at 890px 700px, rgba(234, 234, 234, 0.4) 50%, rgba(234, 234, 234, 0) 51%),
+          radial-gradient(1.8px 1.8px at 1350px 820px, rgba(234, 234, 234, 0.5) 50%, rgba(234, 234, 234, 0) 51%);
+      }
+      .moon {
+        position: absolute;
+        top: -260px;
+        left: -260px;
+        width: 780px;
+        height: 780px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 62% 40%, rgba(180, 205, 255, 0.28) 0%, rgba(120, 150, 220, 0.12) 42%, rgba(77, 170, 252, 0) 70%);
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background-color: #0e0f13;
+      }
+      .scene-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 28px;
+        padding: 100px 160px;
+      }
+
+      .kicker {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 26px;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: #4daafc;
+      }
+      .headline {
+        font-weight: 900;
+        font-size: 118px;
+        line-height: 1.04;
+        text-align: center;
+        letter-spacing: -0.02em;
+      }
+      .sub {
+        font-size: 40px;
+        font-weight: 500;
+        color: #9d9da8;
+        text-align: center;
+        max-width: 1280px;
+        line-height: 1.35;
+      }
+      .accent {
+        color: #4daafc;
+      }
+
+      /* ---------- scene 1: hook ---------- */
+      #s1 .brand {
+        font-weight: 900;
+        font-size: 220px;
+        letter-spacing: 0.04em;
+        text-shadow: 0 0 90px rgba(77, 170, 252, 0.35);
+      }
+
+      /* ---------- scene 2: zero ---------- */
+      .zero-row {
+        display: flex;
+        gap: 26px;
+        margin-top: 8px;
+      }
+      .zero-chip {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 30px;
+        color: #eaeaea;
+        border: 2px solid rgba(77, 170, 252, 0.55);
+        border-radius: 14px;
+        padding: 16px 30px;
+        background: rgba(77, 170, 252, 0.08);
+      }
+      .models-line {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 26px;
+        color: #9d9da8;
+        margin-top: 14px;
+      }
+
+      /* ---------- screenshot scenes ---------- */
+      .shot-scene {
+        flex-direction: row;
+        gap: 90px;
+        padding: 80px 140px;
+      }
+      .shot-copy {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 30px;
+      }
+      .shot-copy .headline {
+        font-size: 86px;
+        text-align: left;
+      }
+      .feature-list {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .feature {
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+        font-size: 36px;
+        font-weight: 500;
+        color: #eaeaea;
+      }
+      .feature .tick {
+        color: #4daafc;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 32px;
+      }
+      .shot-wrap {
+        width: 540px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .shot-card {
+        width: 500px;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow:
+          0 0 0 1px rgba(77, 170, 252, 0.35),
+          0 40px 120px rgba(0, 0, 0, 0.6),
+          0 0 80px rgba(77, 170, 252, 0.12);
+      }
+      .shot-card img {
+        display: block;
+        width: 100%;
+      }
+
+      /* ---------- scene 6: CTA ---------- */
+      .terminal {
+        width: 1280px;
+        border-radius: 16px;
+        background: #101014;
+        box-shadow:
+          0 0 0 1px rgba(77, 170, 252, 0.3),
+          0 30px 90px rgba(0, 0, 0, 0.55);
+        overflow: hidden;
+      }
+      .terminal-bar {
+        display: flex;
+        gap: 10px;
+        padding: 16px 20px;
+        background: #16161c;
+      }
+      .terminal-bar i {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #3a3d45;
+      }
+      .terminal-body {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 30px;
+        line-height: 1.7;
+        padding: 30px 36px 38px;
+        color: #eaeaea;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .prompt {
+        color: #4daafc;
+      }
+      .cta-url {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 34px;
+        color: #4daafc;
+        letter-spacing: 0.02em;
+      }
+      .cta-meta {
+        font-size: 26px;
+        color: #9d9da8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1920" data-height="1080">
+      <div class="bg"></div>
+      <div class="stars"></div>
+      <div class="moon" id="moon"></div>
+
+      <!-- Scene 1 · 0–4.6s · Hook -->
+      <div class="scene clip" id="s1" data-start="0" data-duration="5.3" data-track-index="1">
+        <div class="scene-content">
+          <div class="kicker" id="s1-kicker">Local AI Coding Agent</div>
+          <div class="brand" id="s1-brand">NYX</div>
+          <div class="sub" id="s1-sub">Feels like Cursor. Runs entirely on <span class="accent">your</span> hardware.</div>
+        </div>
+      </div>
+
+      <!-- Scene 2 · 5–10s · Zero -->
+      <div class="scene clip" id="s2" data-start="4.75" data-duration="5.6" data-track-index="2">
+        <div class="scene-content">
+          <div class="headline" id="s2-headline"><span class="accent">$0</span> per token.</div>
+          <div class="zero-row">
+            <div class="zero-chip" id="s2-c1">no cloud</div>
+            <div class="zero-chip" id="s2-c2">no account</div>
+            <div class="zero-chip" id="s2-c3">no telemetry</div>
+          </div>
+          <div class="models-line" id="s2-models">DeepSeek V4 · GLM 5.2 · Qwen Coder — on a DGX Spark, Mac Studio, or any Ollama box</div>
+        </div>
+      </div>
+
+      <!-- Scene 3 · 10–16s · Agent run -->
+      <div class="scene clip" id="s3" data-start="9.85" data-duration="6.4" data-track-index="1">
+        <div class="scene-content shot-scene">
+          <div class="shot-copy">
+            <div class="headline" id="s3-headline">A real agent.</div>
+            <div class="feature-list">
+              <div class="feature" id="s3-f1"><span class="tick">▸</span>Reads, edits &amp; runs your code</div>
+              <div class="feature" id="s3-f2"><span class="tick">▸</span>Checkpoints — rewind any step</div>
+              <div class="feature" id="s3-f3"><span class="tick">▸</span>Semantic search, 1M context</div>
+            </div>
+          </div>
+          <div class="shot-wrap">
+            <div class="shot-card" id="s3-card"><img src="nyx-agent-run.png" alt="Nyx agent run" /></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4 · 16–21.5s · Control -->
+      <div class="scene clip" id="s4" data-start="15.85" data-duration="5.9" data-track-index="2">
+        <div class="scene-content shot-scene">
+          <div class="shot-wrap">
+            <div class="shot-card" id="s4-card"><img src="nyx-approval.png" alt="Diff approval" /></div>
+          </div>
+          <div class="shot-copy">
+            <div class="headline" id="s4-headline">You stay in control.</div>
+            <div class="feature-list">
+              <div class="feature" id="s4-f1"><span class="tick">▸</span>See every diff before it lands</div>
+              <div class="feature" id="s4-f2"><span class="tick">▸</span>Safe → Autopilot autonomy dial</div>
+              <div class="feature" id="s4-f3"><span class="tick">▸</span>/grind — fix until tests pass</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 5 · 21.5–26s · Fleet -->
+      <div class="scene clip" id="s5" data-start="21.35" data-duration="5.0" data-track-index="1">
+        <div class="scene-content shot-scene">
+          <div class="shot-copy">
+            <div class="headline" id="s5-headline">Your whole fleet.</div>
+            <div class="feature-list">
+              <div class="feature" id="s5-f1"><span class="tick">▸</span>Ollama · LM Studio · vLLM · llama.cpp</div>
+              <div class="feature" id="s5-f2"><span class="tick">▸</span>Auto-failover between machines</div>
+              <div class="feature" id="s5-f3"><span class="tick">▸</span>Benchmark models in one click</div>
+            </div>
+          </div>
+          <div class="shot-wrap">
+            <div class="shot-card" id="s5-card"><img src="nyx-machines.png" alt="Machine manager" /></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 6 · 26–30s · CTA -->
+      <div class="scene clip" id="s6" style="opacity: 0" data-start="26.05" data-duration="3.95" data-track-index="2">
+        <div class="scene-content">
+          <div class="terminal" id="s6-terminal">
+            <div class="terminal-bar"><i></i><i></i><i></i></div>
+            <div class="terminal-body">
+              <span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sthamann/<wbr />nyx-local-ai/main/install.sh | bash<span class="prompt" id="s6-cursor">▌</span>
+            </div>
+          </div>
+          <div class="cta-url" id="s6-url">github.com/sthamann/nyx-local-ai</div>
+          <div class="cta-meta" id="s6-meta">MIT licensed · Open source · Works in Cursor &amp; VS Code</div>
+        </div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        // Ambient: slow moon drift across the whole spot (single tween, no repeats).
+        tl.fromTo("#moon", { x: 0, y: 0 }, { x: 90, y: 40, duration: 30, ease: "none" }, 0);
+
+        // ---------- Scene 1 · hook ----------
+        tl.from("#s1-kicker", { y: -34, opacity: 0, duration: 0.6, ease: "power2.out" }, 0.25);
+        tl.from("#s1-brand", { scale: 0.82, opacity: 0, duration: 0.9, ease: "expo.out" }, 0.45);
+        tl.from("#s1-sub", { y: 44, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.95);
+
+        // transition 1 → 2: push slide left (primary)
+        tl.fromTo("#s1", { xPercent: 0 }, { xPercent: -100, duration: 0.45, ease: "power3.inOut" }, 4.75);
+        tl.fromTo("#s2", { xPercent: 100 }, { xPercent: 0, duration: 0.45, ease: "power3.inOut" }, 4.75);
+
+        // ---------- Scene 2 · zero ----------
+        tl.from("#s2-headline", { y: 60, opacity: 0, duration: 0.7, ease: "power3.out" }, 5.35);
+        tl.from(["#s2-c1", "#s2-c2", "#s2-c3"], { y: 34, opacity: 0, duration: 0.5, ease: "back.out(1.6)", stagger: 0.14 }, 5.85);
+        tl.from("#s2-models", { opacity: 0, duration: 0.6, ease: "sine.out" }, 6.6);
+
+        // transition 2 → 3: zoom-through accent (hero product reveal)
+        tl.fromTo("#s2", { scale: 1, opacity: 1 }, { scale: 1.6, opacity: 0, duration: 0.5, ease: "power4.in" }, 9.6);
+        tl.fromTo("#s3", { scale: 0.86, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.55, ease: "power3.out" }, 9.85);
+
+        // ---------- Scene 3 · agent run ----------
+        tl.from("#s3-headline", { x: -60, opacity: 0, duration: 0.6, ease: "power3.out" }, 10.55);
+        tl.from(["#s3-f1", "#s3-f2", "#s3-f3"], { x: -44, opacity: 0, duration: 0.5, ease: "power2.out", stagger: 0.16 }, 10.85);
+        tl.from("#s3-card", { y: 90, opacity: 0, duration: 0.8, ease: "expo.out" }, 10.7);
+        tl.fromTo("#s3-card", { scale: 1 }, { scale: 1.04, duration: 4.5, ease: "sine.inOut" }, 11.4);
+
+        // transition 3 → 4: push slide left
+        tl.fromTo("#s3", { xPercent: 0 }, { xPercent: -100, duration: 0.4, ease: "power3.inOut" }, 15.85);
+        tl.fromTo("#s4", { xPercent: 100 }, { xPercent: 0, duration: 0.4, ease: "power3.inOut" }, 15.85);
+
+        // ---------- Scene 4 · control ----------
+        tl.from("#s4-card", { y: 90, opacity: 0, duration: 0.8, ease: "expo.out" }, 16.45);
+        tl.from("#s4-headline", { x: 60, opacity: 0, duration: 0.6, ease: "power3.out" }, 16.6);
+        tl.from(["#s4-f1", "#s4-f2", "#s4-f3"], { x: 44, opacity: 0, duration: 0.5, ease: "power2.out", stagger: 0.16 }, 16.9);
+        tl.fromTo("#s4-card", { scale: 1 }, { scale: 1.04, duration: 4.4, ease: "sine.inOut" }, 17.2);
+
+        // transition 4 → 5: push slide left
+        tl.fromTo("#s4", { xPercent: 0 }, { xPercent: -100, duration: 0.4, ease: "power3.inOut" }, 21.35);
+        tl.fromTo("#s5", { xPercent: 100 }, { xPercent: 0, duration: 0.4, ease: "power3.inOut" }, 21.35);
+
+        // ---------- Scene 5 · fleet ----------
+        tl.from("#s5-headline", { x: -60, opacity: 0, duration: 0.55, ease: "power3.out" }, 21.95);
+        tl.from(["#s5-f1", "#s5-f2", "#s5-f3"], { x: -44, opacity: 0, duration: 0.45, ease: "power2.out", stagger: 0.14 }, 22.25);
+        tl.from("#s5-card", { y: 90, opacity: 0, duration: 0.7, ease: "expo.out" }, 22.1);
+        tl.fromTo("#s5-card", { scale: 1 }, { scale: 1.035, duration: 3.4, ease: "sine.inOut" }, 22.6);
+
+        // transition 5 → 6: color dip via fast fade (wind-down into CTA)
+        tl.fromTo("#s5", { opacity: 1 }, { opacity: 0, duration: 0.45, ease: "power2.inOut" }, 25.85);
+        tl.fromTo("#s6", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "sine.out" }, 26.05);
+
+        // ---------- Scene 6 · CTA (final scene: exits allowed) ----------
+        tl.from("#s6-terminal", { y: 70, scale: 0.95, opacity: 0, duration: 0.6, ease: "power3.out" }, 26.35);
+        tl.from("#s6-url", { y: 30, opacity: 0, duration: 0.5, ease: "power2.out" }, 26.8);
+        tl.from("#s6-meta", { opacity: 0, duration: 0.5, ease: "sine.out" }, 27.1);
+        // blinking cursor (finite repeats)
+        tl.to("#s6-cursor", { opacity: 0, duration: 0.4, ease: "steps(1)", repeat: 6, yoyo: true }, 26.9);
+        // gentle fade to black at the very end
+        tl.to(["#s6", ".bg", ".stars", "#moon"], { opacity: 0, duration: 0.7, ease: "power1.in" }, 29.2);
+
+        window.__timelines["main"] = tl;
+      </script>
+    </div>
+  </body>
+</html>
