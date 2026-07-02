@@ -23,7 +23,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.25.0**. Local-first and fully offline-capable (the only optional
+> Status: **v0.25.1**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -78,7 +78,12 @@ If you have serious local hardware and want an agent that treats it seriously, t
 
 - **Zero setup.** Detects local models on start. `ollama pull <model>` → it shows up in the picker.
 - **MCP client.** Connects to the MCP servers from your `~/.cursor/mcp.json` / `.cursor/mcp.json` (stdio + HTTP) and offers their tools to the agent — e.g. `codebase-memory-mcp` for graph-based code memory. Governed by the same per-tool permissions (`mcp:<server>/<tool>`).
-- **Semantic codebase search.** A fully local embedding index (Ollama + `nomic-embed-text`, int8-quantized, incremental) powers the `semantic_search` tool: find code by meaning, not just by regex.
+- **Semantic codebase search.** A fully local embedding index (Ollama + `nomic-embed-text`, int8-quantized, structure-aware chunking, live file-watcher updates) powers the `semantic_search` tool: find code by meaning, not just by regex.
+- **Tab autocomplete.** Inline ghost text from a local FIM model (`qwen2.5-coder:7b`) — the piece that used to require a second extension. Opt-in via the **Nyx Tab** status-bar toggle.
+- **Browser automation.** Headless driving of your installed Chrome/Edge: navigate, read pages as numbered interactive elements, click, type, and screenshot through the vision toolchain.
+- **Task plans.** The agent maintains a visible ○/▸/✓ plan card for multi-step tasks, persisted with the chat.
+- **Verify-before-report.** Behavioral claims must be reproduced with a real test before the agent may report them — no more pattern-matched phantom bugs.
+- **Model eval harness.** Benchmark any endpoint on tool-call success, edit precision, and bug-judgment false positives (`node .harness/eval.mjs`).
 - **Machine manager.** Add labeled endpoints (e.g. *"2× DGX Spark Cluster"*, *"Mac Studio"*), discover their models per-host, and set per-model aliases and per-machine temperature / context length — all from the sidebar. API keys live in the editor's **secret storage**, never in settings.
 - **Model capability badges.** Ollama models are probed via `/api/show`: 🔧 tools, 👁 vision, 🧠 thinking — and their true context length is detected automatically.
 - **Agent mode** with a rich tool set, or **Chat mode** for plain streaming chat.
@@ -156,26 +161,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.25.0.vsix
+npm run package    # produces nyx-local-ai-0.25.1.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.25.0.vsix --force
+cursor --install-extension nyx-local-ai-0.25.1.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.25.0.vsix --force
+code --install-extension nyx-local-ai-0.25.1.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.25.0.vsix --force
+  --install-extension nyx-local-ai-0.25.1.vsix --force
 ```
 
 </details>
@@ -458,8 +463,9 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.lmStudioUrl` | `http://localhost:1234` | LM Studio server base URL |
 | `nyx.machines` | `[]` | Labeled endpoints (managed via the UI) |
 | `nyx.customEndpoints` | `[]` | Legacy extra OpenAI-compatible endpoints (prefer `nyx.machines`) |
-| `nyx.toolPermissions` | `{}` | Per-tool `allow` / `ask` / `deny` overrides; use `mcp:<server>` for future MCP tools |
+| `nyx.toolPermissions` | `{}` | Per-tool `allow` / `ask` / `deny` overrides; MCP tools via `mcp:<server>/<tool>` or `mcp:<server>` |
 | `nyx.maxAgentSteps` | `25` | Max tool iterations per task (a **Continue** button appears at the limit) |
+| `nyx.maxOutputTokens` | `8192` | Hard `max_tokens` cap per generation (0 = off) |
 | `nyx.toolProfile` | `auto` | `full`, `reduced` (core tools only — better for ~7B models), or `auto` by model size |
 | `nyx.systemPromptAppend` | `""` | Extra instructions appended to the agent's system prompt |
 | `nyx.allowPrivateNetworkFetch` | `false` | Allow `fetch_url` to reach localhost / private-network hosts (SSRF guard) |
@@ -478,6 +484,11 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.embeddingOllamaUrl` | `http://localhost:11434` | Ollama host for embeddings |
 | `nyx.mcpEnabled` | `true` | Connect to configured MCP servers |
 | `nyx.mcpServers` | `{}` | Extra MCP servers (same shape as Cursor's mcp.json) |
+| `nyx.autocompleteEnabled` | `false` | Tab autocomplete via a local FIM model (opt-in) |
+| `nyx.autocompleteModel` | `qwen2.5-coder:7b` | FIM-capable Ollama model for completions |
+| `nyx.autocompleteOllamaUrl` | `""` | Ollama host for autocomplete (empty = `nyx.ollamaUrl`) |
+| `nyx.autocompleteMaxTokens` | `160` | Max tokens per inline completion |
+| `nyx.browserExecutable` | `""` | Chromium binary for browser tools (empty = auto-detect Chrome/Edge) |
 
 ---
 
@@ -489,7 +500,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.25.0.vsix --force
+cursor --install-extension nyx-local-ai-0.25.1.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
@@ -601,6 +612,15 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 ### 29. MCP tools
 - Have a server in `~/.cursor/mcp.json` (e.g. `codebase-memory-mcp`). Open Nyx → the status line reports `MCP: N tool(s) from M server(s)`.
 - Ask *"Index this repository with codebase-memory and show the index status."* → approval card for `mcp:codebase-memory-mcp/index_repository`, then the tool result. Set `"nyx.toolPermissions": { "mcp:codebase-memory-mcp": "allow" }` to skip prompts for that server.
+
+### 30. Task plan
+- Give a multi-step task (e.g. *"Rename X across the project, then update the docs, then verify."*) → a pinned **Plan** card appears above the transcript and ticks off steps as the agent works.
+
+### 31. Tab autocomplete
+- `ollama pull qwen2.5-coder:7b`, run *Nyx: Toggle Tab Autocomplete* (status bar shows **Nyx Tab**), open a code file and start typing → ghost-text completions appear; Tab accepts.
+
+### 32. Browser automation
+- Ask *"Open https://example.com in the browser and tell me what the page links to."* → approve `browser_navigate`; the agent reads the page snapshot and can click/type via element refs.
 
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.
