@@ -1,0 +1,42 @@
+name: Release
+
+# Builds the .vsix and attaches it (with stable name + checksums) to the
+# GitHub release, so `install.sh` / `install.ps1` one-liners work.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build & package
+        run: |
+          npm run package
+          VSIX=$(ls nyx-local-ai-*.vsix | head -1)
+          cp "$VSIX" nyx-local-ai.vsix
+          sha256sum nyx-local-ai.vsix "$VSIX" > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            nyx-local-ai.vsix
+            nyx-local-ai-*.vsix
+            checksums.txt
+          generate_release_notes: true

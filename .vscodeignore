@@ -1,4 +1,5 @@
 .vscode/**
+.github/**
 .harness/**
 src/**
 webview/**
@@ -11,6 +12,8 @@ tsconfig.json
 .git/**
 *.vsix
 *.traineddata
+install.sh
+install.ps1
 
 # tesseract.js: Node uses only the *.js + *.wasm pairs of the LSTM cores
 # (OEM default). Legacy (non-lstm) cores and the single-file browser bundles

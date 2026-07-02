@@ -131,7 +131,26 @@ If you have serious local hardware and want an agent that treats it seriously, t
 
 ## Install
 
-Build the `.vsix` and install it:
+**One-line install** (macOS / Linux) — detects Cursor and VS Code, downloads the
+latest release (SHA-256 verified), installs, done:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sthamann/nyx-local-ai/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/sthamann/nyx-local-ai/main/install.ps1 | iex
+```
+
+Options (append after `bash -s --`): `--editor=cursor|code|all`,
+`--version=vX.Y.Z`, `--vsix=<local file>`, `--from-source`. If no release
+exists yet, the script automatically falls back to cloning and building from
+source (needs Node ≥ 18).
+
+<details>
+<summary>Manual install / build from source</summary>
 
 ```bash
 npm install
@@ -157,6 +176,12 @@ If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on mac
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
   --install-extension nyx-local-ai-0.24.1.vsix --force
 ```
+
+</details>
+
+Releases are produced by CI (`.github/workflows/release.yml`): pushing a `v*`
+tag builds the `.vsix` and attaches it as `nyx-local-ai.vsix` together with
+`checksums.txt` — exactly what the installers download and verify.
 
 Then **reload the window** (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*) and click the **Nyx** icon in the Activity Bar (or the **Nyx** entry in the status bar).
 

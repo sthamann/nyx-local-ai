@@ -389,7 +389,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "node esbuild.mjs --production",
-    "package": "vsce package --allow-missing-repository --baseImagesUrl https://raw.githubusercontent.com/stefanhamann/nyx-local-ai/main"
+    "package": "vsce package --allow-missing-repository --baseImagesUrl https://raw.githubusercontent.com/sthamann/nyx-local-ai/main"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
