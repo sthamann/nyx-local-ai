@@ -340,9 +340,9 @@ Works out of the box with servers like **codebase-memory-mcp** (graph-based code
 
 ### Semantic codebase search (local RAG)
 `semantic_search(query)` finds code by **meaning** — "where is authentication handled?" — even when no keyword matches. Fully local:
-- Files are chunked (~48 lines, overlapping) and embedded through a local Ollama model (`nyx.embeddingModel`, default `nomic-embed-text`, auto-pulled on first use).
-- Vectors are **int8-quantized** and persisted in workspace storage (a 2,500-file repo stays in the tens of MB).
-- The index updates **incrementally** (file size+mtime hashes) on every search; build it eagerly via *Nyx: Build/Update Semantic Index* or reset with *Nyx: Rebuild Semantic Index from Scratch*.
+- **Structure-aware chunking**: files are split at function/class/section boundaries (with merge/window handling for tiny and oversized units), so a chunk usually holds one coherent code unit — markedly better retrieval than fixed windows. Files without recognizable structure fall back to overlapping windows.
+- Chunks are embedded through a local Ollama model (`nyx.embeddingModel`, default `nomic-embed-text`, auto-pulled on first use); vectors are **int8-quantized** and persisted in workspace storage (a 2,500-file repo stays in the tens of MB).
+- **Live incremental updates**: a file watcher re-embeds changed files in the background (debounced, hash-checked) once an index exists — searches always see fresh code. Build eagerly via *Nyx: Build/Update Semantic Index* or reset with *Nyx: Rebuild Semantic Index from Scratch*.
 - The agent is instructed to use `semantic_search` for conceptual questions and `search_files` (ripgrep) for exact strings.
 
 Disable with `nyx.semanticIndexEnabled`. For graph-aware retrieval (call paths, architecture queries), pair it with `codebase-memory-mcp` via MCP.

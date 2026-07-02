@@ -16,6 +16,7 @@ writeFileSync(
   `
 export { extractEmbeddedToolCalls, parseJsonLoose, repairJson, parseDsmlToolCalls, stripSpecialTokens } from '${process.cwd()}/src/models/client.ts';
 export { applyStringEdit } from '${process.cwd()}/src/agent/tools.ts';
+export { chunkFile } from '${process.cwd()}/src/context/semanticIndex.ts';
 `,
 );
 
@@ -119,6 +120,19 @@ check('normal code untouched', m.stripSpecialTokens('a | b || c <div>|</div>') =
 const invokeOnly = `<${BAR}DSML${BAR}invoke name="read_file">\n<${BAR}DSML${BAR}parameter name="path" string="true">a.ts</${BAR}DSML${BAR}parameter>\n</${BAR}DSML${BAR}invoke>`;
 const d4 = m.parseDsmlToolCalls(invokeOnly);
 check('DSML invoke without wrapper parsed', d4 && d4.calls.length === 1 && JSON.parse(d4.calls[0].arguments).path === 'a.ts');
+
+// --- structure-aware chunking ---
+const code =
+  'import x from "y";\n\n' +
+  'export function alpha() {\n' + '  return 1;\n'.repeat(15) + '}\n\n' +
+  'export class Beta {\n' + '  method() { return 2; }\n'.repeat(20) + '}\n\n' +
+  'function gamma() {\n' + '  return 3;\n'.repeat(15) + '}\n';
+const chunks = m.chunkFile(code);
+check('structural chunks found', chunks.length >= 3);
+const alphaChunk = chunks.find((c) => c.text.includes('function alpha'));
+check('function boundary respected', alphaChunk && !alphaChunk.text.includes('class Beta'));
+const flat = 'word '.repeat(30) + '\n' + ('line\n'.repeat(120));
+check('fallback windowing works', m.chunkFile(flat).length >= 2);
 
 rmSync(dir, { recursive: true, force: true });
 console.log(failures === 0 ? 'ALL PASS' : `${failures} FAILURES`);

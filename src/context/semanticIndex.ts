@@ -42,7 +42,7 @@ const MAX_FILES = 2500;
 const MAX_FILE_BYTES = 200000;
 const MAX_CHUNKS = 12000;
 const EMBED_BATCH = 16;
-const INCLUDE_GLOB = '**/*.{ts,tsx,js,jsx,mjs,cjs,py,rb,go,rs,java,kt,swift,c,h,cpp,hpp,cs,php,twig,vue,svelte,html,css,scss,less,json,yaml,yml,toml,md,mdx,sql,sh,zsh,bash,graphql,proto,xml,ini,env.example,Dockerfile}';
+export const INCLUDE_GLOB = '**/*.{ts,tsx,js,jsx,mjs,cjs,py,rb,go,rs,java,kt,swift,c,h,cpp,hpp,cs,php,twig,vue,svelte,html,css,scss,less,json,yaml,yml,toml,md,mdx,sql,sh,zsh,bash,graphql,proto,xml,ini,env.example,Dockerfile}';
 const EXCLUDE_GLOB = '**/{node_modules,.git,dist,out,build,.next,.venv,.cache,vendor,coverage}/**';
 
 function quantize(vec: number[]): { b64: string; scale: number } {
@@ -271,18 +271,87 @@ export class SemanticIndex {
   stats(): { files: number; chunks: number } {
     return { files: Object.keys(this.index?.files ?? {}).length, chunks: this.index?.chunks.length ?? 0 };
   }
+
+  /** True once an index exists (in memory or on disk) — used by the live watcher. */
+  async hasIndex(): Promise<boolean> {
+    await this.loadFromDisk();
+    return (this.index?.chunks.length ?? 0) > 0;
+  }
 }
 
-function chunkFile(text: string): Array<{ startLine: number; endLine: number; text: string }> {
+interface Chunk {
+  startLine: number;
+  endLine: number;
+  text: string;
+}
+
+const MIN_UNIT_LINES = 10;
+const MAX_UNIT_LINES = 90;
+
+/**
+ * Matches the start of a code unit (function/class/method definitions) across
+ * the common languages, at top or shallow nesting level.
+ */
+const BOUNDARY_RE =
+  /^\s{0,4}(?:export\s+|default\s+|public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|async\s+)*(?:function[\s*]|class\s|interface\s|enum\s|namespace\s|trait\s|struct\s|impl[\s<]|module\s|object\s|def\s|fn\s|func\s|sub\s|proc\s|type\s+\w+\s*(?:=|\{)|(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:\(|function)|@\w+|#\[)/;
+
+/** Markdown/plain-text section boundary. */
+const HEADING_RE = /^#{1,4}\s|^={3,}\s*$|^-{3,}\s*$/;
+
+/**
+ * Structure-aware chunking: splits at function/class/section boundaries so a
+ * chunk usually holds one coherent unit (much better retrieval than fixed
+ * windows), merges tiny units into their neighbor, and windows oversized units.
+ * Falls back to fixed windows when a file exposes no recognizable structure.
+ */
+export function chunkFile(text: string): Chunk[] {
   const lines = text.split('\n');
-  const chunks: Array<{ startLine: number; endLine: number; text: string }> = [];
-  for (let start = 0; start < lines.length; start += CHUNK_LINES - CHUNK_OVERLAP) {
-    const end = Math.min(lines.length, start + CHUNK_LINES);
+  const boundaries: number[] = [0];
+  for (let i = 1; i < lines.length; i++) {
+    if (BOUNDARY_RE.test(lines[i]) || HEADING_RE.test(lines[i])) {
+      boundaries.push(i);
+    }
+  }
+  if (boundaries.length < 3) {
+    return windowChunks(lines, 0, lines.length);
+  }
+
+  // Build units between boundaries, merging units smaller than MIN_UNIT_LINES.
+  const units: Array<{ start: number; end: number }> = [];
+  for (let b = 0; b < boundaries.length; b++) {
+    const start = boundaries[b];
+    const end = b + 1 < boundaries.length ? boundaries[b + 1] : lines.length;
+    const prev = units[units.length - 1];
+    if (prev && (end - start < MIN_UNIT_LINES || prev.end - prev.start < MIN_UNIT_LINES) && end - prev.start <= MAX_UNIT_LINES) {
+      prev.end = end;
+    } else {
+      units.push({ start, end });
+    }
+  }
+
+  const chunks: Chunk[] = [];
+  for (const unit of units) {
+    if (unit.end - unit.start > MAX_UNIT_LINES) {
+      chunks.push(...windowChunks(lines, unit.start, unit.end));
+      continue;
+    }
+    const body = lines.slice(unit.start, unit.end).join('\n').trim();
+    if (body.length > 20) {
+      chunks.push({ startLine: unit.start + 1, endLine: unit.end, text: body.slice(0, 4000) });
+    }
+  }
+  return chunks;
+}
+
+function windowChunks(lines: string[], from: number, to: number): Chunk[] {
+  const chunks: Chunk[] = [];
+  for (let start = from; start < to; start += CHUNK_LINES - CHUNK_OVERLAP) {
+    const end = Math.min(to, start + CHUNK_LINES);
     const body = lines.slice(start, end).join('\n').trim();
     if (body.length > 20) {
       chunks.push({ startLine: start + 1, endLine: end, text: body.slice(0, 4000) });
     }
-    if (end >= lines.length) {
+    if (end >= to) {
       break;
     }
   }

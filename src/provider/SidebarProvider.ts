@@ -15,7 +15,7 @@ import { SessionStore } from './SessionStore';
 import type { StoredSession } from './SessionStore';
 import { loadMcpConfigs, McpManager } from '../mcp/client';
 import { BrowserManager, cleanupBrowserShots } from '../agent/browser';
-import { SemanticIndex } from '../context/semanticIndex';
+import { INCLUDE_GLOB, SemanticIndex } from '../context/semanticIndex';
 import type { SemanticOptions } from '../context/semanticIndex';
 import type { MediaOptions } from '../context/media';
 import type { AttachmentMeta, ChatMode, DiffSummary, DisplayItem, HostToWebview, ModelInfo, PlanItem, QuestionType, WebviewToHost } from '../types';
@@ -81,12 +81,56 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       () => vscode.workspace.getConfiguration('nyx').get<string>('browserExecutable') || undefined,
     );
     void cleanupBrowserShots();
+    this.watchForIndexUpdates();
   }
 
   dispose(): void {
     this.processes.killAll();
     this.mcp.disposeAll();
     void this.browser.dispose();
+    this.indexWatcher?.dispose();
+    if (this.indexDebounce) {
+      clearTimeout(this.indexDebounce);
+    }
+  }
+
+  private indexWatcher: vscode.FileSystemWatcher | undefined;
+  private indexDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Live incremental indexing: once an index exists, file changes trigger a
+   * debounced background update (hash-checked, so only changed files are
+   * re-embedded). Without an existing index this stays completely idle.
+   */
+  private watchForIndexUpdates(): void {
+    if (!this.workspaceRoot()) {
+      return;
+    }
+    this.indexWatcher = vscode.workspace.createFileSystemWatcher(INCLUDE_GLOB);
+    const schedule = (): void => {
+      if (this.indexDebounce) {
+        clearTimeout(this.indexDebounce);
+      }
+      this.indexDebounce = setTimeout(() => {
+        void this.refreshIndexIfBuilt();
+      }, 8000);
+    };
+    this.indexWatcher.onDidChange(schedule);
+    this.indexWatcher.onDidCreate(schedule);
+    this.indexWatcher.onDidDelete(schedule);
+  }
+
+  private async refreshIndexIfBuilt(): Promise<void> {
+    const opts = this.semanticOptions();
+    if (!opts || this.busy || !(await this.semanticIndex.hasIndex())) {
+      return;
+    }
+    try {
+      // Silent background update; only hash-changed files are re-embedded.
+      await this.semanticIndex.ensureIndex({ ...opts, onStatus: undefined });
+    } catch {
+      // Embedding host offline etc. — the next explicit search will surface it.
+    }
   }
 
   private semanticOptions(): SemanticOptions | undefined {
