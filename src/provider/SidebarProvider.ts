@@ -3,7 +3,9 @@ import { discoverModels, probeMachine } from '../models/discovery';
 import { MachineStore } from '../models/machines';
 import { AgentSession, generateSessionTitle } from '../agent/agent';
 import { parameterBillions } from '../agent/toolSchemas';
+import { runBenchmark } from '../eval/benchmark';
 import { streamChat, stripSpecialTokens } from '../models/client';
+import type { BenchmarkScores } from '../types';
 import { CheckpointStore } from '../agent/checkpoints';
 import { MemoryStore } from '../agent/memory';
 import { ProcessManager } from '../agent/processes';
@@ -316,6 +318,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       case 'getMachines':
         await this.postMachines();
+        this.postBenchmarks();
         return;
       case 'testMachine': {
         const withSecret = { ...message.machine };
@@ -464,6 +467,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
       case 'commitChanges':
         await this.commitSessionChanges();
+        return;
+      case 'benchmarkModel':
+        await this.benchmarkModel(message.machineId, message.modelId);
         return;
       default: {
         const exhaustive: never = message;
@@ -953,6 +959,42 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** True when the user explicitly pinned a utility model (routes compaction too). */
   private hasExplicitUtilityModel(): boolean {
     return Boolean((vscode.workspace.getConfiguration('nyx').get<string>('utilityModel') ?? '').trim());
+  }
+
+  // ---- Model benchmark ----
+
+  private static readonly BENCH_KEY = 'nyx.benchmarks.v1';
+
+  private getBenchmarks(): Record<string, BenchmarkScores> {
+    return this.context.globalState.get<Record<string, BenchmarkScores>>(SidebarProvider.BENCH_KEY, {});
+  }
+
+  private postBenchmarks(runningKey?: string, error?: string): void {
+    this.post({ type: 'benchmarks', entries: this.getBenchmarks(), runningKey, error });
+  }
+
+  /** Runs the 9-request in-product benchmark against one model and stores the scores. */
+  private async benchmarkModel(machineId: string, modelId: string): Promise<void> {
+    const key = `${machineId}:${modelId}`;
+    const model = this.models.find((m) => m.key === key);
+    if (!model) {
+      this.postBenchmarks(undefined, `Model ${modelId} is not reachable right now — run "Test & discover" first.`);
+      return;
+    }
+    this.postBenchmarks(key);
+    try {
+      const scores = await runBenchmark(model, (t) => this.post({ type: 'status', text: `${model.label}: ${t}` }), AbortSignal.timeout(600000));
+      const all = this.getBenchmarks();
+      all[key] = scores;
+      await this.context.globalState.update(SidebarProvider.BENCH_KEY, all);
+      this.postBenchmarks();
+      this.post({
+        type: 'status',
+        text: `Benchmark ${model.label}: tools ${scores.tool}% · edits ${scores.edit}% · judgment ${scores.judge}% · FP ${scores.fp}% · ${scores.avgMs} ms/req`,
+      });
+    } catch (e) {
+      this.postBenchmarks(undefined, e instanceof Error ? e.message : String(e));
+    }
   }
 
   /** Builds the net session diff: checkpoint originals vs. current disk state. */

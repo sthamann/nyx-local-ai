@@ -59,7 +59,7 @@ import {
   setMode,
 } from './composer';
 import { renderHistory, renderMemory, renderSessionTabs, updateChatTitle } from './history';
-import { isEditing, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
+import { isEditing, onBenchmarks, onMachineTestResult, renderMachines, startAdd, stopEditing } from './machines';
 import { initReview, renderReview, updateChangesChip } from './review';
 
 /** Capability badges shown next to the model name in the picker (#19). */
@@ -323,6 +323,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'review':
       renderReview(message.files);
+      return;
+    case 'benchmarks':
+      onBenchmarks(message.entries, message.runningKey, message.error);
       return;
     default: {
       const exhaustive: never = message;

@@ -279,6 +279,11 @@ prompt, tool schemas, and tool-call parser, so scores reflect in-product
 behavior. Example (DeepSeek V4 Flash on a DGX Spark cluster): 80% tool calls,
 67% edits, 83% judgment, 33% FP rate, ~1.3 s/request.
 
+**Or benchmark from the UI:** ⚙ Manage models → edit a machine → **Benchmark**
+next to any model runs a compact 9-request version in-product and pins the
+scores as a chip (🔧 tools ✏ edits 🧠 judgment; hover for FP rate and latency).
+Results are stored, so you can compare machines side by side.
+
 ### System prompt design
 Nyx's system prompt distills the battle-tested conventions from production
 agents (Cursor, Claude Code, Windsurf — see the public

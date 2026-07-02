@@ -2034,3 +2034,20 @@ select.nyx-inp {
   overflow-y: auto;
   margin: 0;
 }
+
+/* ---- v0.26: benchmark chips ---- */
+.nyx-bench-chip {
+  font-size: 10px;
+  color: var(--nyx-muted);
+  border: 1px solid var(--nyx-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nyx-bench-btn {
+  padding: 1px 8px;
+  font-size: 10px;
+  flex-shrink: 0;
+}

@@ -1,6 +1,30 @@
-import type { Machine, MachineModelPref, MachineType } from '../src/types';
+import type { BenchmarkScores, Machine, MachineModelPref, MachineType } from '../src/types';
 import { escapeHtml, mmBody } from './dom';
 import { post, S } from './state';
+
+let benchmarks: Record<string, BenchmarkScores> = {};
+let benchmarkRunning: string | undefined;
+
+/** Stores incoming benchmark results and refreshes the editor's model rows. */
+export function onBenchmarks(entries: Record<string, BenchmarkScores>, runningKey?: string, error?: string): void {
+  benchmarks = entries;
+  benchmarkRunning = runningKey;
+  if (error) {
+    const status = document.getElementById('mmTestStatus');
+    if (status) {
+      status.textContent = `Benchmark: ${error}`;
+    }
+  }
+  renderModelRows();
+}
+
+function scoreChip(scores: BenchmarkScores | undefined): string {
+  if (!scores) {
+    return '';
+  }
+  const title = `tools ${scores.tool}% · edits ${scores.edit}% · judgment ${scores.judge}% · false positives ${scores.fp}% · ${scores.avgMs} ms/request`;
+  return `<span class="nyx-bench-chip" title="${escapeHtml(title)}">&#128295;${scores.tool}% &#9998;${scores.edit}% &#129504;${scores.judge}%</span>`;
+}
 
 const HARDWARE_PRESETS = ['Mac Studio', 'DGX Spark', 'DGX Spark Cluster', 'GPU Server', 'PC / Workstation', 'Other'];
 
@@ -240,6 +264,8 @@ function renderModelRows(): void {
   container.innerHTML = '<div class="nyx-field-label">Models on this machine</div>';
   for (const id of editorDiscovered) {
     const pref = prefs.get(id);
+    const benchKey = `${editing!.id}:${id}`;
+    const running = benchmarkRunning === benchKey;
     const row = document.createElement('div');
     row.className = 'nyx-model-row';
     row.innerHTML = `
@@ -247,7 +273,14 @@ function renderModelRows(): void {
         <input type="checkbox" data-mid="${escapeHtml(id)}" ${pref?.enabled === false ? '' : 'checked'} />
         <span>${escapeHtml(id)}</span>
       </label>
+      ${scoreChip(benchmarks[benchKey])}
+      <button class="nyx-btn secondary nyx-bench-btn" type="button" data-bench="${escapeHtml(id)}" ${running ? 'disabled' : ''} title="Run the 9-request benchmark (tool calls, edits, bug judgment) against this model">${running ? 'Running…' : 'Benchmark'}</button>
       <input class="nyx-inp small" type="text" data-alias="${escapeHtml(id)}" value="${escapeHtml(pref?.alias ?? '')}" placeholder="alias (optional)" />`;
+    row.querySelector('[data-bench]')?.addEventListener('click', (e) => {
+      (e.target as HTMLButtonElement).disabled = true;
+      (e.target as HTMLButtonElement).textContent = 'Running…';
+      post({ type: 'benchmarkModel', machineId: editing!.id, modelId: id });
+    });
     container.appendChild(row);
   }
 }

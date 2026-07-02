@@ -210,7 +210,9 @@ export type WebviewToHost =
   | { type: 'revertFile'; path: string }
   | { type: 'revertAll' }
   /** Stages the session's changed files and commits with a generated message. */
-  | { type: 'commitChanges' };
+  | { type: 'commitChanges' }
+  /** Runs the in-product benchmark against one model of a machine. */
+  | { type: 'benchmarkModel'; machineId: string; modelId: string };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -251,7 +253,19 @@ export type HostToWebview =
   /** Host-side config the UI mirrors (autonomy preset). */
   | { type: 'config'; autonomy: string }
   /** All net file changes of this session vs. its checkpoints. */
-  | { type: 'review'; files: ReviewFile[] };
+  | { type: 'review'; files: ReviewFile[] }
+  /** Stored benchmark scores per model key + optional just-finished/failed run. */
+  | { type: 'benchmarks'; entries: Record<string, BenchmarkScores>; runningKey?: string; error?: string };
+
+/** Scores of the in-product model benchmark (percentages; fp lower = better). */
+export interface BenchmarkScores {
+  tool: number;
+  edit: number;
+  judge: number;
+  fp: number;
+  avgMs: number;
+  at: number;
+}
 
 /** One changed file in the review view. */
 export interface ReviewFile {
