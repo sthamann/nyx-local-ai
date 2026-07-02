@@ -2,7 +2,7 @@
   "name": "nyx-local-ai",
   "displayName": "Nyx — Local AI",
   "description": "A local-first AI coding agent sidebar. Auto-detects Ollama & LM Studio models. No account, no cloud.",
-  "version": "0.24.2",
+  "version": "0.25.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
