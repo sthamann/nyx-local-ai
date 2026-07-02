@@ -220,6 +220,23 @@ Nyx can live in the left Activity Bar (default) or the **secondary side bar** on
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
 - **Chat** is a single plain streaming response with no tools.
 
+### Tab autocomplete (fill-in-the-middle)
+Inline ghost-text completions from a small local model — the missing piece
+that previously required a second extension (Twinny/Continue). Opt-in via
+`nyx.autocompleteEnabled` or the **Nyx Tab** status-bar toggle:
+
+- Uses Ollama's native FIM (`/api/generate` with `suffix`), so any FIM-capable
+  model works: `qwen2.5-coder:7b` (default, ~200–300 ms), `codellama`,
+  `starcoder2`, `codegemma`.
+- Debounced (250 ms), cancellable, cached per position, capped at 12 lines,
+  and suffix-aware (won't repeat what's already after the cursor).
+- Runs against `nyx.autocompleteOllamaUrl` (defaults to your main Ollama), so
+  chat can live on the DGX while autocomplete stays on a snappy local 7B.
+
+```bash
+ollama pull qwen2.5-coder:7b   # then: Nyx: Toggle Tab Autocomplete
+```
+
 ### Model eval harness
 Which of your machines/models should be the daily driver? `.harness/eval.mjs`
 benchmarks any OpenAI-compatible endpoint on the skills Nyx actually needs:
@@ -577,7 +594,6 @@ storage; project memory lives in the workspace state.
 ## Roadmap (not yet implemented)
 
 - **Browser automation** (Playwright) as a built-in tool.
-- **Tab autocomplete** (fill-in-the-middle via a small local model).
 
 ---
 

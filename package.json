@@ -105,6 +105,11 @@
         "command": "nyx.rebuildIndex",
         "title": "Rebuild Semantic Index from Scratch",
         "category": "Nyx"
+      },
+      {
+        "command": "nyx.toggleAutocomplete",
+        "title": "Toggle Tab Autocomplete",
+        "category": "Nyx"
       }
     ],
     "keybindings": [
@@ -288,6 +293,26 @@
           ],
           "default": "auto",
           "description": "Which tool set to offer the model. 'reduced' exposes only the core tools (better for ~7B models); 'auto' picks based on the model size in its name."
+        },
+        "nyx.autocompleteEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Tab autocomplete via fill-in-the-middle on a small local model (opt-in; keeps a model warm on your GPU)."
+        },
+        "nyx.autocompleteModel": {
+          "type": "string",
+          "default": "qwen2.5-coder:7b",
+          "description": "FIM-capable Ollama model for tab autocomplete (qwen2.5-coder, codellama, starcoder2, codegemma…)."
+        },
+        "nyx.autocompleteOllamaUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Ollama host for autocomplete. Empty = use nyx.ollamaUrl."
+        },
+        "nyx.autocompleteMaxTokens": {
+          "type": "number",
+          "default": 160,
+          "description": "Max tokens per inline completion."
         },
         "nyx.semanticIndexEnabled": {
           "type": "boolean",

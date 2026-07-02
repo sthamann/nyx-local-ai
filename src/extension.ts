@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SidebarProvider } from './provider/SidebarProvider';
 import { DropZoneProvider } from './provider/DropZoneProvider';
+import { NyxCompletionProvider } from './autocomplete/completer';
 
 const RIGHT_SIDE_PROMPT_KEY = 'nyx.rightSidePrompted';
 
@@ -122,6 +123,25 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('nyx.rebuildIndex', () => {
       void provider.buildSemanticIndex(true);
+    }),
+  );
+
+  // Tab autocomplete (fill-in-the-middle on a small local model, opt-in).
+  const completer = new NyxCompletionProvider();
+  context.subscriptions.push(
+    completer,
+    vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, completer),
+    vscode.commands.registerCommand('nyx.toggleAutocomplete', async () => {
+      const cfg = vscode.workspace.getConfiguration('nyx');
+      const next = !(cfg.get<boolean>('autocompleteEnabled') ?? false);
+      await cfg.update('autocompleteEnabled', next, vscode.ConfigurationTarget.Global);
+      completer.updateStatusItem();
+      void vscode.window.setStatusBarMessage(`Nyx tab autocomplete: ${next ? 'on' : 'off'}`, 2500);
+    }),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('nyx.autocompleteEnabled') || e.affectsConfiguration('nyx.autocompleteModel')) {
+        completer.updateStatusItem();
+      }
     }),
   );
 
