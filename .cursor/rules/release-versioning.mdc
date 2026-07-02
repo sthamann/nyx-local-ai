@@ -1,0 +1,44 @@
+---
+description: Release process, version bumps, and VSIX hygiene for nyx-local-ai
+alwaysApply: true
+---
+
+# Release & versioning
+
+The repo slug is **sthamann/nyx-local-ai** — it appears in `install.sh`,
+`install.ps1`, README and `package.json` (`scripts.package` baseImagesUrl).
+Never introduce a different slug.
+
+## Version bump checklist (all three, always together)
+
+1. `package.json` → `"version"`
+2. `README.md` → status line (`**vX.Y.Z**`) and every `nyx-local-ai-X.Y.Z.vsix` mention
+3. `src/mcp/client.ts` → `clientInfo.version`
+
+Quick check for stragglers: `rg -n "0\.<old-minor>\." package.json README.md src/mcp/client.ts`
+
+## Quality gates before packaging
+
+Run in this order; all must pass:
+
+```bash
+npm run typecheck
+node .harness/smoke.mjs      # parser/edit logic smoke tests — must print ALL PASS
+npm run build
+npm run package
+```
+
+## Releasing
+
+Releases are produced **only** by CI (`.github/workflows/release.yml`):
+`git tag vX.Y.Z && git push origin vX.Y.Z` builds and attaches
+`nyx-local-ai.vsix` + `checksums.txt` — the exact artifact names
+`install.sh`/`install.ps1` download and verify. Never hand-upload artifacts.
+
+## VSIX size
+
+The package must stay ≈4–6 MB. `node_modules` ships in the VSIX (tesseract.js
+is external), so when adding a runtime dependency, extend `.vscodeignore` to
+strip its dead weight and check the size vsce reports after `npm run package`.
+Dev-only dependencies (bundled by esbuild, e.g. `marked`, `highlight.js`)
+belong in `devDependencies`.
