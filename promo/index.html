@@ -285,6 +285,7 @@
               <div class="feature" id="s4-f1"><span class="tick">▸</span>See every diff before it lands</div>
               <div class="feature" id="s4-f2"><span class="tick">▸</span>Safe → Autopilot autonomy dial</div>
               <div class="feature" id="s4-f3"><span class="tick">▸</span>/grind — fix until tests pass</div>
+              <div class="feature" id="s4-f4"><span class="tick">▸</span>🛡 Privacy report — every host contacted</div>
             </div>
           </div>
         </div>
@@ -317,7 +318,7 @@
             </div>
           </div>
           <div class="cta-url" id="s6-url">github.com/sthamann/nyx-local-ai</div>
-          <div class="cta-meta" id="s6-meta">MIT licensed · Open source · Works in Cursor &amp; VS Code</div>
+          <div class="cta-meta" id="s6-meta">v0.27.0 · MIT licensed · Open source · Works in Cursor &amp; VS Code</div>
         </div>
       </div>
 
@@ -359,7 +360,7 @@
         // ---------- Scene 4 · control ----------
         tl.from("#s4-card", { y: 90, opacity: 0, duration: 0.8, ease: "expo.out" }, 16.45);
         tl.from("#s4-headline", { x: 60, opacity: 0, duration: 0.6, ease: "power3.out" }, 16.6);
-        tl.from(["#s4-f1", "#s4-f2", "#s4-f3"], { x: 44, opacity: 0, duration: 0.5, ease: "power2.out", stagger: 0.16 }, 16.9);
+        tl.from(["#s4-f1", "#s4-f2", "#s4-f3", "#s4-f4"], { x: 44, opacity: 0, duration: 0.5, ease: "power2.out", stagger: 0.16 }, 16.9);
         tl.fromTo("#s4-card", { scale: 1 }, { scale: 1.04, duration: 4.4, ease: "sine.inOut" }, 17.2);
 
         // transition 4 → 5: push slide left
