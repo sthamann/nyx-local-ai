@@ -514,6 +514,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'viewFocus':
         this.webviewFocused = message.focused;
         return;
+      case 'checkForUpdates':
+        await vscode.commands.executeCommand('nyx.checkForUpdates');
+        return;
       case 'refreshModels':
         await this.refreshModels();
         return;
@@ -741,7 +744,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private postConfig(): void {
     const accent = (vscode.workspace.getConfiguration('nyx').get<string>('accentColor') ?? '').trim();
-    this.post({ type: 'config', autonomy: this.autonomy(), accentColor: accent || undefined });
+    const version = (this.context.extension?.packageJSON as { version?: string } | undefined)?.version;
+    this.post({ type: 'config', autonomy: this.autonomy(), accentColor: accent || undefined, version });
   }
 
   private getQueue(): string[] {

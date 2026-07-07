@@ -38,6 +38,8 @@ export const S = {
   savedDraft: saved.draft ?? '',
   showSessionTabs: saved.showSessionTabs ?? true,
   promptHistory: saved.promptHistory ?? ([] as string[]),
+  /** Extension version, delivered by the host with the config message (About popup). */
+  version: undefined as string | undefined,
 };
 
 export function persist(draft?: string): void {

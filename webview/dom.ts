@@ -1,7 +1,9 @@
+import { post, S } from './state';
+
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
   <div class="nyx-topbar">
-    <span class="nyx-brand" title="Nyx \u2014 your local AI agent (not Cursor's cloud agent)" aria-hidden="true">&#10022;<span class="nyx-brand-name">NYX</span></span>
+    <button id="nyx-brand" class="nyx-brand" type="button" title="About Nyx \u2014 version, GitHub, updates" aria-label="About Nyx" aria-haspopup="dialog">&#10022;<span class="nyx-brand-name">NYX</span></button>
     <button id="nyx-hist" class="nyx-icon-btn" type="button" title="Chats \u2014 full history with search" aria-label="Chats">&#9776;</button>
     <button id="nyx-new" class="nyx-icon-btn nyx-new" type="button" title="Start a new chat">+ New</button>
     <span class="nyx-chat-title" id="nyx-chat-title" title=""></span>
@@ -205,6 +207,85 @@ export function relativeTime(ts: number): string {
   }
   return new Date(ts).toLocaleDateString();
 }
+
+// ---- About popup (click on the ✦ NYX brand) ----
+
+const brandBtn = el<HTMLButtonElement>('nyx-brand');
+let aboutCleanup: (() => void) | undefined;
+
+function closeAbout(): void {
+  aboutCleanup?.();
+  aboutCleanup = undefined;
+}
+
+function openAbout(): void {
+  const popup = document.createElement('div');
+  popup.className = 'nyx-about';
+  popup.setAttribute('role', 'dialog');
+  popup.setAttribute('aria-label', 'About Nyx');
+
+  const head = document.createElement('div');
+  head.className = 'nyx-about-head';
+  head.textContent = '\u2726 Nyx \u2014 Local AI';
+  popup.appendChild(head);
+
+  const version = document.createElement('div');
+  version.className = 'nyx-about-version';
+  version.textContent = S.version ? `Version ${S.version}` : 'Version unknown';
+  popup.appendChild(version);
+
+  const sub = document.createElement('div');
+  sub.className = 'nyx-about-sub';
+  sub.textContent = 'Local-first coding agent. No account, no cloud, no telemetry \u2014 every request goes to your own machines.';
+  popup.appendChild(sub);
+
+  const links = document.createElement('div');
+  links.className = 'nyx-about-links';
+  const addLink = (label: string, href: string): void => {
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = label;
+    links.appendChild(a);
+  };
+  addLink('GitHub', 'https://github.com/sthamann/nyx-local-ai');
+  addLink('Report an issue', 'https://github.com/sthamann/nyx-local-ai/issues');
+  popup.appendChild(links);
+
+  const actions = document.createElement('div');
+  actions.className = 'nyx-about-actions';
+  const update = document.createElement('button');
+  update.type = 'button';
+  update.className = 'nyx-btn secondary';
+  update.textContent = 'Check for updates';
+  update.addEventListener('click', () => {
+    post({ type: 'checkForUpdates' });
+    closeAbout();
+  });
+  actions.appendChild(update);
+  popup.appendChild(actions);
+
+  brandBtn.parentElement!.appendChild(popup);
+
+  const onMouseDown = (e: MouseEvent) => {
+    if (!popup.contains(e.target as Node) && e.target !== brandBtn) {
+      closeAbout();
+    }
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeAbout();
+    }
+  };
+  window.addEventListener('mousedown', onMouseDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  aboutCleanup = () => {
+    popup.remove();
+    window.removeEventListener('mousedown', onMouseDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+  };
+}
+
+brandBtn.addEventListener('click', () => (aboutCleanup ? closeAbout() : openAbout()));
 
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) {

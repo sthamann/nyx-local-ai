@@ -29,7 +29,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.28.0**. Local-first and fully offline-capable (the only optional
+> Status: **v0.28.1**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -92,7 +92,7 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Native diff view.** "Open diff" links in approval cards and the review view open the editor's real diff (session start ↔ current file).
 - **Active-file context.** The file you're editing (±30 lines around the cursor) rides along automatically — small enough for local context budgets, off via `nyx.includeActiveFile`.
 - **Chat handoff (both directions).** *Copy Chat as Markdown (Handoff)* puts the whole session on the clipboard for Cursor's agent, a PR, or an issue — and *Import Handoff from Clipboard* brings a Cursor conversation into Nyx to continue it locally.
-- **Editor-tab mode & focus toggle.** Open Nyx as a full editor tab next to Cursor's agent (*Open Nyx in Editor Tab*), and flip between code and Nyx with one key (`Cmd/Ctrl+Alt+N` — both directions). A ✦ NYX wordmark + accent line (configurable via `nyx.accentColor`) keeps the two worlds visually distinct.
+- **Editor-tab mode & focus toggle.** Open Nyx as a full editor tab next to Cursor's agent (*Open Nyx in Editor Tab*), and flip between code and Nyx with one key (`Cmd/Ctrl+Alt+N` — both directions). A violet brand identity — ✦ NYX badge, accent line, tabs, meter (configurable via `nyx.accentColor`) — keeps the two worlds visually distinct; clicking the badge opens **About** (version, GitHub, update check).
 - **Terminal as context.** Attach the active terminal's output with one command, or let the agent read it via the `read_terminal` tool — "fix the error in my terminal" just works.
 - **Workspace map.** A compact repo map (~400 tokens) rides along with every agent request, so models stop guessing where files live.
 - **Warm model keep-alive.** After each turn Nyx re-arms Ollama's keep-alive (default `30m`), so the model stays loaded and follow-up turns skip the reload pause.
@@ -180,26 +180,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.28.0.vsix
+npm run package    # produces nyx-local-ai-0.28.1.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.28.0.vsix --force
+cursor --install-extension nyx-local-ai-0.28.1.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.28.0.vsix --force
+code --install-extension nyx-local-ai-0.28.1.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.28.0.vsix --force
+  --install-extension nyx-local-ai-0.28.1.vsix --force
 ```
 
 </details>
@@ -252,7 +252,8 @@ Nyx can live in the left Activity Bar (default), the **secondary side bar** on t
 
 - **Editor tab:** run *Nyx: Open Nyx in Editor Tab* (or click the ↗ icon in the Nyx title bar). Nyx opens as a regular editor tab: both agent worlds stay visible side by side, and the tab participates in normal editor navigation (`Ctrl+Tab`). Sidebar and tab show the same live session.
 - **Focus toggle:** `Cmd/Ctrl+Alt+N` jumps into Nyx — and pressed *inside* Nyx, jumps back to your code. One key, both directions (*Nyx: Toggle Nyx Focus*).
-- **Brand identity:** the Nyx panel carries a **✦ NYX wordmark and an accent line** at the top, so it is never mistaken for Cursor's agent. The color follows the theme's focus color and can be overridden via `nyx.accentColor` (e.g. `#b180d7`).
+- **Brand identity:** the Nyx panel carries its own **violet accent** — a ✦ NYX badge, an accent line, the active tab/mode, the assistant's name, the context meter, and the Send button all share it, so Nyx is never mistaken for Cursor's agent. Override the color via `nyx.accentColor`.
+- **About:** click the **✦ NYX badge** for the About popup — extension version, GitHub / issue links, and a *Check for updates* button.
 - **Move to right:** click the layout icon in the Nyx title bar, or run *Nyx: Move Nyx to the Right Side Bar* and choose *Secondary Side Bar* in the picker.
 - **Show panel:** click **Nyx** in the status bar, or run *Nyx: Show Panel* from the Command Palette.
 - **Reset location:** if the panel vanishes after dragging views around, run *Nyx: Reset Panel Location (fix hidden/disappeared panel)* — this resets all view locations and re-focuses Nyx on the left.
@@ -711,7 +712,7 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.includeActiveFile` | `true` | Auto-include the active file (±30 lines around the cursor) as context |
 | `nyx.repoMap` | `true` | Inject a compact workspace map (~400 tokens) into the agent's system context |
 | `nyx.keepAlive` | `30m` | Keep the model loaded on Ollama between turns (warm KV cache); empty disables |
-| `nyx.accentColor` | `""` | Brand accent color of the Nyx panel (any CSS color; empty = theme focus color) |
+| `nyx.accentColor` | `""` | Brand accent color of the Nyx panel (any CSS color; empty = Nyx violet) |
 | `nyx.semanticIndexEnabled` | `true` | Local embedding index for `semantic_search` |
 | `nyx.embeddingModel` | `nomic-embed-text` | Embedding model (auto-pulled via Ollama) |
 | `nyx.embeddingOllamaUrl` | `http://localhost:11434` | Override: host for embeddings (default = helper host) |
@@ -738,7 +739,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.28.0.vsix --force
+cursor --install-extension nyx-local-ai-0.28.1.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
@@ -915,6 +916,9 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 
 ### 48. Warm keep-alive
 - Send a message via an Ollama model, then run `ollama ps` in a terminal → the model shows an **UNTIL** ~30 minutes in the future (default `nyx.keepAlive: "30m"`). The 🛡 privacy report lists the host with purpose *model keep-alive*.
+
+### 49. About popup
+- Click the **✦ NYX badge** top-left → the About popup shows the extension version with **GitHub** / **Report an issue** links and a **Check for updates** button (native notification with the result). Esc or clicking elsewhere closes it.
 
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.

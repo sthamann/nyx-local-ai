@@ -19,7 +19,13 @@ export async function warmKeepAlive(model: ModelInfo, keepAlive: string): Promis
         'Content-Type': 'application/json',
         ...(model.apiKey ? { Authorization: `Bearer ${model.apiKey}` } : {}),
       },
-      body: JSON.stringify({ model: model.id, keep_alive: keepAlive.trim() }),
+      body: JSON.stringify({
+        model: model.id,
+        keep_alive: keepAlive.trim(),
+        // Must match the options the chat requests used: Ollama reloads the
+        // runner when num_ctx differs, which would evict the warm model.
+        ...(typeof model.numCtx === 'number' ? { options: { num_ctx: model.numCtx } } : {}),
+      }),
       signal: AbortSignal.timeout(10000),
     });
   } catch {

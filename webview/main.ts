@@ -326,6 +326,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'config':
       autonomySelect.value = message.autonomy;
+      S.version = message.version ?? S.version;
       if (message.accentColor) {
         document.documentElement.style.setProperty('--nyx-accent', message.accentColor);
       } else {

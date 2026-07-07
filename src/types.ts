@@ -232,7 +232,9 @@ export type WebviewToHost =
   /** Applies the post-benchmark setup recommendation. */
   | { type: 'applyBenchSetup'; dailyKey?: string; utilityKey?: string; autocompleteModel?: string }
   /** The webview gained/lost keyboard focus (powers the focus-toggle command). */
-  | { type: 'viewFocus'; focused: boolean };
+  | { type: 'viewFocus'; focused: boolean }
+  /** About popup: run the update check (native notification with the result). */
+  | { type: 'checkForUpdates' };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -270,8 +272,8 @@ export type HostToWebview =
   | { type: 'mentionResults'; token: string; files: string[] }
   /** The agent's current task plan (empty array hides the card). */
   | { type: 'plan'; items: PlanItem[] }
-  /** Host-side config the UI mirrors (autonomy preset, optional brand accent color). */
-  | { type: 'config'; autonomy: string; accentColor?: string }
+  /** Host-side config the UI mirrors (autonomy preset, brand accent, extension version). */
+  | { type: 'config'; autonomy: string; accentColor?: string; version?: string }
   /** All net file changes of this session vs. its checkpoints. */
   | { type: 'review'; files: ReviewFile[] }
   /** Stored benchmark scores per model key + optional just-finished/failed run. */
