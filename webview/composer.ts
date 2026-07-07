@@ -25,7 +25,7 @@ import {
   sendBtn,
   showView,
 } from './dom';
-import { hasTranscript, renderEmptyState } from './transcript';
+import { hasTranscript, renderEmptyState, setStatus } from './transcript';
 import { persist, post, S } from './state';
 
 let queueCollapsed = false;
@@ -554,12 +554,37 @@ function parseUriList(dt: DataTransfer | null): string[] {
   return Array.from(new Set(out));
 }
 
+const MAX_DROP_FILES = 10;
+const MAX_DROP_BYTES = 25 * 1024 * 1024;
+
+/** Sends OS-dropped files (bytes, no path available in the webview) to the host. */
+async function attachDroppedFiles(files: File[]): Promise<void> {
+  let skipped = 0;
+  for (const file of files.slice(0, MAX_DROP_FILES)) {
+    if (file.size > MAX_DROP_BYTES) {
+      skipped++;
+      continue;
+    }
+    const buf = await file.arrayBuffer();
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    post({ type: 'attachFileData', name: file.name, dataBase64: btoa(binary) });
+  }
+  if (skipped > 0 || files.length > MAX_DROP_FILES) {
+    setStatus(`Some dropped files were skipped (max ${MAX_DROP_FILES} files, 25 MB each).`);
+  }
+}
+
 function showDropOverlay(sub?: string): void {
   if (dropHintTimer) {
     clearTimeout(dropHintTimer);
     dropHintTimer = undefined;
   }
-  dropSub.innerHTML = sub ?? 'Hold <b>Shift</b> while dragging from the Explorer';
+  dropSub.innerHTML = sub ?? 'From the editor Explorer hold <b>Shift</b> · from Finder/OS just drop';
   dropOverlay.hidden = false;
 }
 
@@ -697,6 +722,15 @@ export function initComposer(): void {
     if (uris.length > 0) {
       hideDropOverlay();
       post({ type: 'attachDropped', uris });
+      showView('chat');
+      return;
+    }
+    // OS drops (Finder/Explorer of the operating system) expose no paths in the
+    // sandboxed webview — but they carry the bytes. Ship those to the host.
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length > 0) {
+      hideDropOverlay();
+      void attachDroppedFiles(files);
       showView('chat');
       return;
     }

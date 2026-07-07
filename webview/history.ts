@@ -1,5 +1,5 @@
 import type { MemoryEntry, SessionMeta } from '../src/types';
-import { chatTitleEl, escapeHtml, historyList, memList, relativeTime, sessionTabsEl, showView, tabsToggleBtn } from './dom';
+import { chatTitleEl, escapeHtml, historyList, memList, relativeTime, sessionTabsEl, showContextMenu, showView, tabsToggleBtn } from './dom';
 import { setStatus } from './transcript';
 import { post, S } from './state';
 
@@ -185,71 +185,27 @@ const MAX_TABS = 12;
 
 // ---- Tab context menu (right-click on a session tab) ----
 
-let tabMenuCleanup: (() => void) | undefined;
-
-function closeTabMenu(): void {
-  tabMenuCleanup?.();
-  tabMenuCleanup = undefined;
-}
-
 function showTabMenu(event: MouseEvent, session: SessionMeta): void {
   event.preventDefault();
-  closeTabMenu();
-
-  const menu = document.createElement('div');
-  menu.className = 'nyx-tab-menu';
-  menu.setAttribute('role', 'menu');
-  menu.setAttribute('aria-label', `Actions for "${session.title}"`);
-
-  const addItem = (label: string, onClick: () => void): HTMLButtonElement => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'nyx-tab-menu-item';
-    item.setAttribute('role', 'menuitem');
-    item.textContent = label;
-    item.addEventListener('click', () => {
-      closeTabMenu();
-      onClick();
-    });
-    menu.appendChild(item);
-    return item;
-  };
-
-  addItem('Close chat', () => post({ type: 'deleteSession', id: session.id }));
-  const closeOthers = addItem('Close other chats', () => {
-    // Keeping a non-active tab means switching to it — blocked while a job runs.
-    if (session.id !== S.currentSessionId && guardBusySwitch()) {
-      return;
-    }
-    post({ type: 'deleteOtherSessions', keepId: session.id });
-  });
-  closeOthers.disabled = S.sessions.length < 2;
-
-  document.body.appendChild(menu);
-  const rect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(0, Math.min(event.clientX, window.innerWidth - rect.width - 4))}px`;
-  menu.style.top = `${Math.max(0, Math.min(event.clientY, window.innerHeight - rect.height - 4))}px`;
-
-  const onMouseDown = (e: MouseEvent) => {
-    if (!menu.contains(e.target as Node)) {
-      closeTabMenu();
-    }
-  };
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      closeTabMenu();
-    }
-  };
-  const onBlur = () => closeTabMenu();
-  window.addEventListener('mousedown', onMouseDown, true);
-  window.addEventListener('keydown', onKeyDown, true);
-  window.addEventListener('blur', onBlur);
-  tabMenuCleanup = () => {
-    menu.remove();
-    window.removeEventListener('mousedown', onMouseDown, true);
-    window.removeEventListener('keydown', onKeyDown, true);
-    window.removeEventListener('blur', onBlur);
-  };
+  showContextMenu(
+    event.clientX,
+    event.clientY,
+    [
+      { label: 'Close chat', onClick: () => post({ type: 'deleteSession', id: session.id }) },
+      {
+        label: 'Close other chats',
+        disabled: S.sessions.length < 2,
+        onClick: () => {
+          // Keeping a non-active tab means switching to it — blocked while a job runs.
+          if (session.id !== S.currentSessionId && guardBusySwitch()) {
+            return;
+          }
+          post({ type: 'deleteOtherSessions', keepId: session.id });
+        },
+      },
+    ],
+    `Actions for "${session.title}"`,
+  );
 }
 
 /** Renders the session tab strip (recent chats as switchable pills). */

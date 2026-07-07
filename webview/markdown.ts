@@ -72,6 +72,27 @@ export function renderMarkdown(el: HTMLElement, text: string): void {
   el.innerHTML = marked.parse(text) as string;
 }
 
+/** Markdown → HTML string (same pipeline incl. math) — for "Copy as HTML". */
+export function markdownToHtml(text: string): string {
+  return marked.parse(text) as string;
+}
+
+/** Markdown → plain text with block structure preserved (for "Copy as plain text"). */
+export function markdownToPlainText(text: string): string {
+  const scratch = document.createElement('div');
+  scratch.style.cssText = 'position:fixed;left:-99999px;top:0;white-space:pre-wrap;';
+  scratch.innerHTML = marked.parse(text) as string;
+  // Collapse rendered math back to its TeX source (KaTeX markup is unreadable as text).
+  scratch.querySelectorAll('.katex').forEach((k) => {
+    const tex = k.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? k.textContent ?? '';
+    k.replaceWith(document.createTextNode(tex));
+  });
+  document.body.appendChild(scratch);
+  const plain = (scratch as HTMLElement).innerText.replace(/\n{3,}/g, '\n\n').trim();
+  scratch.remove();
+  return plain;
+}
+
 /** Full render: markdown + syntax highlighting + copy buttons (for finished messages). */
 export function renderMarkdownFinal(el: HTMLElement, text: string): void {
   renderMarkdown(el, text);

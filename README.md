@@ -29,7 +29,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.28.1**. Local-first and fully offline-capable (the only optional
+> Status: **v0.29.0**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -127,12 +127,13 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Chat history & session tabs.** Every conversation is saved locally — an always-visible tab strip switches between recent chats instantly (right-click a tab for **Close chat** / **Close other chats**); the full history is searchable by title/model/machine with edit stats (+/− lines, files changed).
 - **Reasoning display.** Models that stream thinking (`reasoning_content`, `<think>`, …) show a collapsible *Thought for Ns* block above the answer.
 - **Markdown answers.** GitHub-flavored markdown with **syntax highlighting**, a copy button on every code block, and **math rendering**: LaTeX formulas (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) render as real typeset math via a bundled KaTeX — fully offline.
+- **Copy any answer.** Every finished answer has a **⧉ Copy** action with a format menu: **plain text** (markdown stripped, formulas back to TeX), **Markdown** (verbatim), or **HTML** (rich clipboard flavor — pastes formatted into mail/docs, as markup into editors).
 - **Local-model resilience.** Whitespace-tolerant `edit_file` matching, JSON repair for sloppy tool arguments, tool calls detected even when embedded in prose, automatic retry on transient network errors, and failover to another machine serving the same model.
 - **Parallel tool calls.** Independent read-only calls emitted in one turn (multiple reads/searches) execute concurrently — on slow local models every saved roundtrip is seconds off the task.
 - **Fast search.** `search_files` uses the ripgrep binary shipped with the editor (with a JS fallback).
 - **Done badge.** If Nyx finishes while the panel is hidden, its icon shows a badge.
 - **Right-side panel.** Move Nyx to the secondary side bar (next to Cursor's agent panel), recover it via the status bar or Command Palette if it disappears.
-- **Drop-to-attach.** Drag files from the Explorer onto the **Attach files (drop here)** strip — no Shift key needed (webview drops still require Shift).
+- **Drop-to-attach.** Drag files from **Finder/OS straight onto the chat** (bytes are captured — no path needed), from the Explorer onto the **Attach files (drop here)** strip, or onto the chat with Shift held (editor-internal drags only reach the webview with Shift).
 - **Local-model tool parsing.** Tool calls embedded as JSON or function-style text (`ask_user(...)`) in the model output are detected automatically.
 
 ---
@@ -180,26 +181,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.28.1.vsix
+npm run package    # produces nyx-local-ai-0.29.0.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.28.1.vsix --force
+cursor --install-extension nyx-local-ai-0.29.0.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.28.1.vsix --force
+code --install-extension nyx-local-ai-0.29.0.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.28.1.vsix --force
+  --install-extension nyx-local-ai-0.29.0.vsix --force
 ```
 
 </details>
@@ -490,8 +491,9 @@ Attach context for the next message via:
 - right-click a file/folder in the Explorer → **Add to Nyx context**,
 - select code in the editor → right-click → **Add Selection to Nyx** (or `Cmd/Ctrl+Alt+L`),
 - the editor tab context menu → **Add to Nyx context**,
+- drag files from **Finder / the OS file manager** directly onto the chat — the webview can't see OS paths, so Nyx captures the **bytes** (up to 10 files, 25 MB each), stores them in extension storage, and attaches from there,
 - drag files onto the **Attach files (drop here)** strip below the chat (no Shift needed),
-- or drag onto the chat panel while holding **Shift** (VS Code webview limitation).
+- or drag from the editor's Explorer onto the chat panel while holding **Shift** (editor-internal drags only reach webviews with Shift — a VS Code limitation).
 
 - **paste an image from the clipboard** (screenshot → `Cmd/Ctrl+V` in the composer).
 
@@ -652,6 +654,15 @@ For the full archive, open **History** (☰): chats grouped by date (*Today*, *Y
 ### Auto-named chats
 After the first exchange, Nyx asks the model for a short 3–6 word title and names the chat automatically (shown in the top bar and in History). Falls back to the first message if generation is unavailable. Toggle with `nyx.autoTitle`.
 
+### Copy any answer (plain text / Markdown / HTML)
+Hover a finished answer and a **⧉ Copy** action appears under it, opening a
+three-format menu:
+- **Plain text** — markdown stripped to readable text; rendered math collapses back to its TeX source.
+- **Markdown** — the answer verbatim, ready for READMEs, issues, PRs.
+- **HTML** — the rendered markup in **both clipboard flavors**: rich editors (mail, docs, wikis) paste formatted content, code editors get the HTML source.
+
+Code blocks additionally keep their own per-block Copy button.
+
 ### Chat export & handoff (both directions)
 Two ways out of a session: *Nyx: Export Chat as Markdown* saves the full
 transcript (messages, collapsible tool cards, Q&A) as a `.md` file, and
@@ -739,7 +750,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.28.1.vsix --force
+cursor --install-extension nyx-local-ai-0.29.0.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
@@ -919,6 +930,12 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 
 ### 49. About popup
 - Click the **✦ NYX badge** top-left → the About popup shows the extension version with **GitHub** / **Report an issue** links and a **Check for updates** button (native notification with the result). Esc or clicking elsewhere closes it.
+
+### 50. Copy answer as plain text / Markdown / HTML
+- Hover a finished answer → click **⧉ Copy** → pick **Markdown** and paste into a text editor: the raw markdown arrives (backticks intact). Pick **Plain text**: formatting is stripped. Pick **HTML** and paste into a rich editor (e.g. an email): the formatted content appears.
+
+### 51. OS file drop
+- Drag a file from **Finder** (or the OS file manager) directly onto the chat → the drop overlay appears, and on drop the file shows up as a 📄 attachment chip — no Shift needed. Editor-Explorer drags still need Shift (or use the drop strip below the chat).
 
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.

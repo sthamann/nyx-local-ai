@@ -209,6 +209,8 @@ export type WebviewToHost =
   | { type: 'setAutonomy'; value: string }
   /** An image pasted from the clipboard into the composer. */
   | { type: 'attachImage'; dataBase64: string; mime: string }
+  /** A file dropped from the OS (Finder/Explorer drops carry bytes, not paths). */
+  | { type: 'attachFileData'; name: string; dataBase64: string }
   // Review-changes flow.
   | { type: 'getReview' }
   | { type: 'revertFile'; path: string }

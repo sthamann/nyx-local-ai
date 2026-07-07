@@ -656,6 +656,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'attachImage':
         await this.attachPastedImage(message.dataBase64, message.mime);
         return;
+      case 'attachFileData':
+        await this.attachDroppedFileData(message.name, message.dataBase64);
+        return;
       case 'getReview':
         await this.postReview();
         return;
@@ -1727,6 +1730,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'status', text: 'Image attached from clipboard.' });
     } catch (e) {
       this.post({ type: 'error', text: `Could not attach pasted image: ${e instanceof Error ? e.message : String(e)}` });
+    }
+  }
+
+  /**
+   * A file dropped from the OS: the sandboxed webview sees bytes but no path,
+   * so the content is persisted into extension storage and attached from there.
+   */
+  private async attachDroppedFileData(name: string, dataBase64: string): Promise<void> {
+    const safeName = (name || 'dropped-file').replace(/[^\w.\- ()]/g, '_').slice(-120);
+    const dir = vscode.Uri.joinPath(this.context.globalStorageUri, 'dropped');
+    await vscode.workspace.fs.createDirectory(dir).then(undefined, () => undefined);
+    const uri = vscode.Uri.joinPath(dir, `${Date.now()}-${safeName}`);
+    try {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(dataBase64, 'base64'));
+      if (!this.attachments.some((a) => a.path === uri.fsPath)) {
+        this.attachments.push({ path: uri.fsPath, name: safeName, kind: 'file' });
+      }
+      this.postAttachments();
+      this.post({ type: 'status', text: `Attached dropped file: ${safeName}` });
+    } catch (e) {
+      this.post({ type: 'error', text: `Could not attach dropped file: ${e instanceof Error ? e.message : String(e)}` });
     }
   }
 

@@ -145,7 +145,7 @@ class McpConnection {
       {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: 'nyx-local-ai', version: '0.28.1' },
+        clientInfo: { name: 'nyx-local-ai', version: '0.29.0' },
       },
       INIT_TIMEOUT_MS,
     );

@@ -1,6 +1,6 @@
 import type { DiffSummary, DisplayItem, PlanItem, QuestionType, SetupStatus } from '../src/types';
-import { escapeHtml, messagesEl, planEl, scrollToBottom, speedEl } from './dom';
-import { renderMarkdown, renderMarkdownFinal } from './markdown';
+import { escapeHtml, messagesEl, planEl, scrollToBottom, showContextMenu, speedEl } from './dom';
+import { markdownToHtml, markdownToPlainText, renderMarkdown, renderMarkdownFinal } from './markdown';
 import { post, S } from './state';
 
 let assistantEl: HTMLElement | null = null;
@@ -223,9 +223,75 @@ export function renderUser(text: string, checkpointId?: string): void {
   }
 }
 
+// ---- Copy message (plain text / markdown / HTML) ----
+
+async function copyMessageAs(format: 'plain' | 'markdown' | 'html', raw: string): Promise<void> {
+  if (format === 'markdown') {
+    await navigator.clipboard?.writeText(raw);
+    return;
+  }
+  if (format === 'plain') {
+    await navigator.clipboard?.writeText(markdownToPlainText(raw));
+    return;
+  }
+  // HTML: put the rendered markup on the clipboard in both flavors — rich
+  // editors (mail, docs) paste formatted content, code editors get the source.
+  const html = markdownToHtml(raw);
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([html], { type: 'text/plain' }),
+        }),
+      ]);
+      return;
+    }
+  } catch {
+    // ClipboardItem unsupported/denied — fall back to the plain writer below.
+  }
+  await navigator.clipboard?.writeText(html);
+}
+
+/** Adds the "⧉ Copy" action (with a format menu) under a finished assistant message. */
+function addAssistantActions(bubble: HTMLElement, raw: string): void {
+  const wrap = bubble.parentElement as HTMLElement | null;
+  if (!wrap) {
+    return;
+  }
+  wrap.querySelector('.nyx-msg-actions')?.remove();
+  const actions = document.createElement('div');
+  actions.className = 'nyx-msg-actions';
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'nyx-msg-action';
+  copyBtn.textContent = '\u29C9 Copy';
+  copyBtn.title = 'Copy this answer — as plain text, Markdown, or HTML';
+
+  const confirm = (label: string): void => {
+    copyBtn.textContent = `\u2713 Copied ${label}`;
+    window.setTimeout(() => (copyBtn.textContent = '\u29C9 Copy'), 1400);
+  };
+  const item = (label: string, format: 'plain' | 'markdown' | 'html') => ({
+    label,
+    onClick: () => {
+      void copyMessageAs(format, raw)
+        .then(() => confirm(label.toLowerCase()))
+        .catch(() => setStatus('Clipboard is unavailable in this window.'));
+    },
+  });
+  copyBtn.addEventListener('click', () => {
+    const rect = copyBtn.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 4, [item('Plain text', 'plain'), item('Markdown', 'markdown'), item('HTML', 'html')], 'Copy message as');
+  });
+  actions.appendChild(copyBtn);
+  wrap.appendChild(actions);
+}
+
 export function renderAssistant(text: string): void {
   const bubble = addBubble('assistant');
   renderMarkdownFinal(bubble, text);
+  addAssistantActions(bubble, text);
 }
 
 /** Replaces the streamed assistant bubble content with the cleaned final text. */
@@ -240,6 +306,7 @@ export function replaceLastAssistant(text: string): void {
   }
   if (text.trim()) {
     renderMarkdownFinal(last, text);
+    addAssistantActions(last, text);
   } else {
     last.parentElement?.remove();
   }
@@ -985,6 +1052,7 @@ export function onAssistantEnd(): void {
       assistantEl.classList.remove('nyx-cursor');
       assistantEl.style.whiteSpace = '';
       renderMarkdownFinal(assistantEl, assistantText);
+      addAssistantActions(assistantEl, assistantText);
     }
   }
   assistantEl = null;

@@ -103,7 +103,7 @@ app.innerHTML = `
     <div class="nyx-drop-card">
       <div class="nyx-drop-icon">&#128206;</div>
       <div class="nyx-drop-title" id="nyx-drop-title">Drop to attach</div>
-      <div class="nyx-drop-sub" id="nyx-drop-sub">Hold <b>Shift</b> while dragging from the Explorer</div>
+      <div class="nyx-drop-sub" id="nyx-drop-sub">From the editor Explorer hold <b>Shift</b> \u00b7 from Finder/OS just drop</div>
     </div>
   </div>
 `;
@@ -206,6 +206,71 @@ export function relativeTime(ts: number): string {
     return `${hours}h ago`;
   }
   return new Date(ts).toLocaleDateString();
+}
+
+// ---- Shared context menu (session tabs, message copy) ----
+
+export interface MenuItem {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}
+
+let menuCleanup: (() => void) | undefined;
+
+export function closeContextMenu(): void {
+  menuCleanup?.();
+  menuCleanup = undefined;
+}
+
+/** Shows a small fixed-position menu at (x, y), clamped to the viewport. */
+export function showContextMenu(x: number, y: number, items: MenuItem[], ariaLabel: string): void {
+  closeContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'nyx-tab-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', ariaLabel);
+
+  for (const item of items) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nyx-tab-menu-item';
+    btn.setAttribute('role', 'menuitem');
+    btn.textContent = item.label;
+    btn.disabled = item.disabled === true;
+    btn.addEventListener('click', () => {
+      closeContextMenu();
+      item.onClick();
+    });
+    menu.appendChild(btn);
+  }
+
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
+  menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+
+  const onMouseDown = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node)) {
+      closeContextMenu();
+    }
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeContextMenu();
+    }
+  };
+  const onBlur = () => closeContextMenu();
+  window.addEventListener('mousedown', onMouseDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('blur', onBlur);
+  menuCleanup = () => {
+    menu.remove();
+    window.removeEventListener('mousedown', onMouseDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('blur', onBlur);
+  };
 }
 
 // ---- About popup (click on the ✦ NYX brand) ----
