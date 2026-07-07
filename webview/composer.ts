@@ -152,6 +152,13 @@ export function renderQueue(): void {
     label.textContent = text;
     const actions = document.createElement('span');
     actions.className = 'nyx-queue-actions';
+    const runNow = document.createElement('button');
+    runNow.type = 'button';
+    runNow.className = 'nyx-queue-send';
+    runNow.title = 'Send now (interrupts the current run)';
+    runNow.setAttribute('aria-label', 'Send now');
+    runNow.innerHTML = '&#9654;';
+    runNow.addEventListener('click', () => post({ type: 'queueRunNow', index }));
     const edit = document.createElement('button');
     edit.type = 'button';
     edit.title = 'Edit';
@@ -184,6 +191,7 @@ export function renderQueue(): void {
       next.splice(index, 1);
       post({ type: 'queueSet', items: next });
     });
+    actions.appendChild(runNow);
     actions.appendChild(edit);
     actions.appendChild(up);
     actions.appendChild(del);
@@ -201,7 +209,16 @@ export function renderAttachments(items: AttachmentMeta[]): void {
   for (const item of items) {
     const chip = document.createElement('span');
     chip.className = 'nyx-chip';
-    const icon = item.kind === 'folder' ? '\u{1F4C1}' : item.kind === 'selection' ? '\u{1F4CC}' : '\u{1F4C4}';
+    const icon =
+      item.kind === 'folder'
+        ? '\u{1F4C1}'
+        : item.kind === 'selection'
+          ? '\u{1F4CC}'
+          : item.kind === 'terminal'
+            ? '\u2318'
+            : item.kind === 'handoff'
+              ? '\u{1F4E5}'
+              : '\u{1F4C4}';
     const name = item.label ?? item.name;
     chip.innerHTML = `<span>${icon}</span><span class="nyx-chip-name">${escapeHtml(name)}</span><button type="button" class="nyx-chip-x" aria-label="Remove">\u2715</button>`;
     chip.querySelector('.nyx-chip-x')?.addEventListener('click', () => post({ type: 'removeAttachment', path: item.path }));

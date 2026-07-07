@@ -1,6 +1,7 @@
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
   <div class="nyx-topbar">
+    <span class="nyx-brand" title="Nyx \u2014 your local AI agent (not Cursor's cloud agent)" aria-hidden="true">&#10022;<span class="nyx-brand-name">NYX</span></span>
     <button id="nyx-hist" class="nyx-icon-btn" type="button" title="Chats \u2014 full history with search" aria-label="Chats">&#9776;</button>
     <button id="nyx-new" class="nyx-icon-btn nyx-new" type="button" title="Start a new chat">+ New</button>
     <span class="nyx-chat-title" id="nyx-chat-title" title=""></span>

@@ -29,7 +29,7 @@ no per-token bill.
 | :---: | :---: |
 | <img src="docs/nyx-approval.png" width="380" alt="Approval card showing the proposed diff for search.ts with Approve, Always allow and Reject buttons, plus a queue of two follow-up jobs" /> | <img src="docs/nyx-machines.png" width="380" alt="Machine manager listing a DGX Cluster (OpenAI-compatible), a Mac Studio running Ollama, and a disabled LM Studio localhost entry" /> |
 
-> Status: **v0.27.0**. Local-first and fully offline-capable (the only optional
+> Status: **v0.28.0**. Local-first and fully offline-capable (the only optional
 > network use is web fetching/search, the one-time OCR language-data download,
 > and the first-time download of a vision/embedding model, all under your control).
 
@@ -91,7 +91,11 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Benchmark-based routing (opt-in).** With `nyx.benchmarkRouting`, the judgment-best benchmarked model plans and the edit-precision winner executes.
 - **Native diff view.** "Open diff" links in approval cards and the review view open the editor's real diff (session start ↔ current file).
 - **Active-file context.** The file you're editing (±30 lines around the cursor) rides along automatically — small enough for local context budgets, off via `nyx.includeActiveFile`.
-- **Chat handoff.** *Copy Chat as Markdown (Handoff)* puts the whole session on the clipboard — paste it into Cursor's agent, a PR, or an issue.
+- **Chat handoff (both directions).** *Copy Chat as Markdown (Handoff)* puts the whole session on the clipboard for Cursor's agent, a PR, or an issue — and *Import Handoff from Clipboard* brings a Cursor conversation into Nyx to continue it locally.
+- **Editor-tab mode & focus toggle.** Open Nyx as a full editor tab next to Cursor's agent (*Open Nyx in Editor Tab*), and flip between code and Nyx with one key (`Cmd/Ctrl+Alt+N` — both directions). A ✦ NYX wordmark + accent line (configurable via `nyx.accentColor`) keeps the two worlds visually distinct.
+- **Terminal as context.** Attach the active terminal's output with one command, or let the agent read it via the `read_terminal` tool — "fix the error in my terminal" just works.
+- **Workspace map.** A compact repo map (~400 tokens) rides along with every agent request, so models stop guessing where files live.
+- **Warm model keep-alive.** After each turn Nyx re-arms Ollama's keep-alive (default `30m`), so the model stays loaded and follow-up turns skip the reload pause.
 - **MCP client.** Connects to the MCP servers from your `~/.cursor/mcp.json` / `.cursor/mcp.json` (stdio + HTTP) and offers their tools to the agent — e.g. `codebase-memory-mcp` for graph-based code memory. Governed by the same per-tool permissions (`mcp:<server>/<tool>`).
 - **Semantic codebase search.** A fully local embedding index (`nomic-embed-text`, int8-quantized, structure-aware chunking, live file-watcher updates) powers the `semantic_search` tool: find code by meaning, not just by regex. Works with Ollama **and** OpenAI-compatible hosts (LM Studio, llama.cpp, vLLM) via a `/v1/embeddings` fallback; coverage limits are configurable (`nyx.indexMaxFiles` / `nyx.indexMaxChunks`) and warn when hit.
 - **Tab autocomplete.** Inline ghost text from a local FIM model (`qwen2.5-coder:7b`) — the piece that used to require a second extension. Opt-in via the **Nyx Tab** status-bar toggle.
@@ -107,7 +111,7 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **File-edit diff cards.** Edits render inline as `path +N −M` cards with a colored diff preview; click the filename to open it in the editor. Edits go through `WorkspaceEdit`, so open editors and undo history stay intact.
 - **@-mentions.** Type `@` in the composer to fuzzy-search workspace files and inline them as context.
 - **Live command output.** `run_command` streams stdout/stderr into the tool card while it runs; `background: true` starts dev servers & long jobs the agent can poll (`check_process`) and stop (`kill_process`) — and Stop actually kills running processes.
-- **Job queue.** Type while the agent is busy to queue follow-up jobs; reorder, edit, or clear them; they run sequentially and survive window reloads (host-side queue).
+- **Job queue.** Type while the agent is busy to queue follow-up jobs; reorder, edit, clear, or **▶ Send now** to jump one ahead (interrupting the current run); they run sequentially and survive window reloads (host-side queue).
 - **URL fetch & web search.** Drop a link in your message to auto-fetch its text and images; the agent can also `web_search` and `fetch_url` on its own.
 - **Safe large-file editing.** Paged reads, targeted `edit_file`, automatic backups, and a shrink guard so files are never silently destroyed.
 - **Temporary test scripts.** `run_script` writes and runs a throwaway bash/python/node script (in a temp dir) to test or verify things.
@@ -120,9 +124,9 @@ If you have serious local hardware and want an agent that treats it seriously, t
 - **Clarifying questions.** The model can ask you single-choice, multiple-choice, or free-text questions.
 - **Project memory.** Key outcomes of past sessions are remembered per project and offered to new sessions (automatically and via tools). Sessions are distilled by the utility model, and `recall_memory` ranks matches with the local embedding index — with keyword search as the offline fallback.
 - **Auto-named chats.** After the first exchange, each chat gets a short model-generated title.
-- **Chat history & session tabs.** Every conversation is saved locally — an always-visible tab strip switches between recent chats instantly; the full history is searchable by title/model/machine with edit stats (+/− lines, files changed).
+- **Chat history & session tabs.** Every conversation is saved locally — an always-visible tab strip switches between recent chats instantly (right-click a tab for **Close chat** / **Close other chats**); the full history is searchable by title/model/machine with edit stats (+/− lines, files changed).
 - **Reasoning display.** Models that stream thinking (`reasoning_content`, `<think>`, …) show a collapsible *Thought for Ns* block above the answer.
-- **Markdown answers.** GitHub-flavored markdown with **syntax highlighting** and a copy button on every code block.
+- **Markdown answers.** GitHub-flavored markdown with **syntax highlighting**, a copy button on every code block, and **math rendering**: LaTeX formulas (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) render as real typeset math via a bundled KaTeX — fully offline.
 - **Local-model resilience.** Whitespace-tolerant `edit_file` matching, JSON repair for sloppy tool arguments, tool calls detected even when embedded in prose, automatic retry on transient network errors, and failover to another machine serving the same model.
 - **Parallel tool calls.** Independent read-only calls emitted in one turn (multiple reads/searches) execute concurrently — on slow local models every saved roundtrip is seconds off the task.
 - **Fast search.** `search_files` uses the ripgrep binary shipped with the editor (with a JS fallback).
@@ -176,26 +180,26 @@ source (needs Node ≥ 18).
 ```bash
 npm install
 npm run build      # bundles the extension + webview
-npm run package    # produces nyx-local-ai-0.27.0.vsix
+npm run package    # produces nyx-local-ai-0.28.0.vsix
 ```
 
 Install into Cursor:
 
 ```bash
-cursor --install-extension nyx-local-ai-0.27.0.vsix --force
+cursor --install-extension nyx-local-ai-0.28.0.vsix --force
 ```
 
 Or VS Code:
 
 ```bash
-code --install-extension nyx-local-ai-0.27.0.vsix --force
+code --install-extension nyx-local-ai-0.28.0.vsix --force
 ```
 
 If the `cursor` CLI is not on your `PATH`, use the full binary path, e.g. on macOS:
 
 ```bash
 "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
-  --install-extension nyx-local-ai-0.27.0.vsix --force
+  --install-extension nyx-local-ai-0.28.0.vsix --force
 ```
 
 </details>
@@ -243,12 +247,16 @@ Open it via the ⚙️ button in the sidebar.
 
 Machines are stored in the `nyx.machines` setting and managed entirely from the UI. API keys are kept in the editor's **SecretStorage** (OS keychain) — never in settings; existing plaintext keys are migrated automatically on first use.
 
-### Panel placement & recovery
-Nyx can live in the left Activity Bar (default) or the **secondary side bar** on the right — mirroring Cursor's own agent panel.
+### Panel placement, editor tab & focus toggle
+Nyx can live in the left Activity Bar (default), the **secondary side bar** on the right — or as a **full editor tab** next to Cursor's own agent window.
 
+- **Editor tab:** run *Nyx: Open Nyx in Editor Tab* (or click the ↗ icon in the Nyx title bar). Nyx opens as a regular editor tab: both agent worlds stay visible side by side, and the tab participates in normal editor navigation (`Ctrl+Tab`). Sidebar and tab show the same live session.
+- **Focus toggle:** `Cmd/Ctrl+Alt+N` jumps into Nyx — and pressed *inside* Nyx, jumps back to your code. One key, both directions (*Nyx: Toggle Nyx Focus*).
+- **Brand identity:** the Nyx panel carries a **✦ NYX wordmark and an accent line** at the top, so it is never mistaken for Cursor's agent. The color follows the theme's focus color and can be overridden via `nyx.accentColor` (e.g. `#b180d7`).
 - **Move to right:** click the layout icon in the Nyx title bar, or run *Nyx: Move Nyx to the Right Side Bar* and choose *Secondary Side Bar* in the picker.
 - **Show panel:** click **Nyx** in the status bar, or run *Nyx: Show Panel* from the Command Palette.
 - **Reset location:** if the panel vanishes after dragging views around, run *Nyx: Reset Panel Location (fix hidden/disappeared panel)* — this resets all view locations and re-focuses Nyx on the left.
+- **Getting started:** a **walkthrough** (*Help → Get Started → Nyx — Local AI*) covers exactly this: the two worlds, the focus toggle, and handoffs in both directions.
 
 ### Agent vs Chat mode
 - **Agent** runs a multi-step tool loop (read → edit → verify → answer), capped by `nyx.maxAgentSteps`.
@@ -361,6 +369,7 @@ Nyx exposes a broad, Cursor-like tool set. Default permissions:
 | `get_diagnostics` | Linter/compiler errors & warnings | allow |
 | `git_diff` | Uncommitted git changes + short status (read-only) | allow |
 | `git_log` | Recent commit history (read-only) | allow |
+| `read_terminal` | Visible output of the active integrated terminal (read-only; *ask* on Safe) | allow |
 | `fetch_url` | Fetch text of an http(s) URL | allow |
 | `web_search` | Search the web (DuckDuckGo) | allow |
 | `recall_memory` | Search project memory of past sessions | allow |
@@ -471,7 +480,7 @@ Several layers protect your files:
 `run_script(language, code)` writes a script to a temp directory, runs it in the workspace root, returns stdout/stderr, and deletes it — so quick tests and verifications never clutter your project. Supports `bash`, `sh`, `zsh`, `python`, `node`.
 
 ### Context management & compaction
-A **Context %** meter shows how full the model's context window is — using the machine's configured context length, the model's advertised size (a 1M model shows a 1M budget), or `nyx.contextTokens` as fallback. **Click the meter for a breakdown** (system prompt vs. conversation vs. tool results) with a *Compact now* action. Space is reclaimed in two stages: at 60% of the budget, **old tool outputs are trimmed** (the last few stay verbatim — usually avoids the expensive step entirely); at `nyx.compactThreshold` (default 75%), older turns are summarized by the model. `nyx.maxOutputTokens` (default 8192) caps each single generation so a runaway model can't flood the session.
+A **Context %** meter shows how full the model's context window is — using the machine's configured context length, the model's advertised size (a 1M model shows a 1M budget), or `nyx.contextTokens` as fallback. **Click the meter for a breakdown** (system prompt vs. conversation vs. tool results) with a *Compact now* action. Space is reclaimed in two stages: at 60% of the budget, **old tool outputs are trimmed** (the last few stay verbatim — usually avoids the expensive step entirely); at `nyx.compactThreshold` (default 75%), older turns are summarized by the model. `nyx.maxOutputTokens` (default 8192) caps each single generation so a runaway model can't flood the session. On top of that, Nyx watches the live stream and **cuts off a degenerate repetition loop** (a word or phrase repeated over and over — common on small local models) the moment it detects one, keeping the partial reply and posting a status note instead of spending minutes on garbage.
 
 ### Attachments
 Attach context for the next message via:
@@ -496,6 +505,26 @@ The file you are editing rides along automatically: each message includes the
 models have tight context budgets), skipped when you already `@`-mentioned
 the file, and disabled entirely via `nyx.includeActiveFile`.
 
+### Terminal as context
+"Fix the error in my terminal" — two ways to make that work:
+- **Attach it yourself:** *Nyx: Attach Terminal Output to Nyx* captures the
+  visible scrollback of the active integrated terminal as a ⌘ chip for the
+  next message.
+- **Let the agent read it:** the `read_terminal` tool returns the same
+  scrollback on demand (read-only; *ask*-gated on the Safe preset because
+  terminals can contain secrets).
+
+Both capture via the editor's select-all/copy commands (VS Code has no stable
+buffer API), restore your clipboard afterwards, and tail-truncate long output.
+
+### Workspace map (repo map)
+Each agent request carries a **compact map of the workspace** — directories
+with their files, shallow levels first, hard-capped at roughly 400 tokens.
+Especially small local models stop guessing paths and jump straight to
+`read_file`/`edit_file` with correct locations, saving whole tool roundtrips.
+Complementary to the semantic index (meaning vs. structure); cached for a few
+minutes and rebuilt automatically. Disable with `nyx.repoMap`.
+
 ### Vision & PDF toolchain
 So even non-vision models can work with images and PDFs:
 - **PDF** → text via `unpdf`.
@@ -511,11 +540,23 @@ settings (`nyx.visionOllamaUrl`, `nyx.embeddingOllamaUrl`,
 `nyx.autocompleteOllamaUrl`) keep working as **explicit overrides** for
 existing setups — no breaking change, just one knob instead of three.
 
+### Warm model keep-alive
+Ollama unloads models after ~5 minutes of idle — so the first message after a
+pause pays the full model-load cost again. After every turn Nyx **re-arms the
+keep-alive timer** of the model it just used (default `30m`, via the
+documented preload call), keeping weights and KV cache hot between turns.
+Configure the duration with `nyx.keepAlive` (`-1` = keep loaded forever,
+empty = off). Ollama machines only; the call appears in the privacy report as
+*model keep-alive*.
+
 ### tokens/sec
 While generating, a **tok/s** indicator shows a live estimate and then an accurate figure from the server's usage data (when provided).
 
 ### Reasoning / thinking display
 When a model streams reasoning separately — via a `reasoning_content` / `reasoning` field (DeepSeek, etc.) or `<think>…</think>` tags in the content — Nyx shows a collapsible **Thinking…** block above the answer. When generation finishes, it collapses to *Thought for Ns*.
+
+### Math rendering (KaTeX)
+LaTeX formulas in answers render as real typeset math: `$$…$$` and `\[…\]` as display blocks, `\(…\)` and `$…$` inline. Rendering uses a **bundled KaTeX** (stylesheet + fonts ship inside the extension — no CDN, fully offline) and is tokenized before markdown parsing, so underscores and backslashes inside formulas survive. Dollar amounts like "$5 and $10" are left alone, and invalid TeX falls back to plain text instead of erroring.
 
 ### Clarifying questions
 When a request is ambiguous, the model calls `ask_user` and you answer inline via single-choice, multiple-choice (with an optional *"Other…"* field), or free text. The Q&A is saved in the transcript.
@@ -524,6 +565,7 @@ When a request is ambiguous, the model calls `ask_user` and you answer inline vi
 While the agent is busy, pressing **Enter** queues your message instead of sending it. The queue panel above the composer lets you **reorder**, **edit**, and **remove** items, or **clear** them. Jobs run one after another.
 - **Stop** cancels the current job and pauses the queue.
 - With the input empty, **Enter** starts the next queued job.
+- **▶ Send now** (per item) runs that job immediately, **interrupting the current run** — handy when a turn is stuck or you changed your mind about what should run next.
 
 ### Batch runs & overnight queue
 Queue up N tasks, hit **▶ Run all** (or *Nyx: Run Queued Jobs (Batch)*), and
@@ -602,19 +644,25 @@ Per project, Nyx distills each session's **key outcomes** (goal, result, changed
 Browse, delete, or clear memories from the 🧠 view in the sidebar. Toggle with `nyx.memoryEnabled`; control the injected count with `nyx.memoryInject`.
 
 ### Chat history & session tabs
-Recent chats live in an **always-visible tab strip** under the title bar — click to switch instantly (browser-tab style, with a `+` for a new chat, × on hover to delete, and an overflow counter that opens the full history). Toggle the strip with the ⧉ button; the preference is remembered. Switching is blocked while a job runs so you never abort one by accident.
+Recent chats live in an **always-visible tab strip** under the title bar — click to switch instantly (browser-tab style, with a `+` for a new chat, × on hover to delete, and an overflow counter that opens the full history). **Right-click a tab** for a context menu with **Close chat** and **Close other chats** — closing deletes the chats, so *Close other chats* asks for confirmation first. Toggle the strip with the ⧉ button; the preference is remembered. Switching is blocked while a job runs so you never abort one by accident.
 
 For the full archive, open **History** (☰): chats grouped by date (*Today*, *Yesterday*, …), searchable by title/model/machine/mode, with edit stats (+/− lines, files changed) and the model shown as a subtle chip. Switching chats restores the full transcript, tool cards, and task plan. Up to 50 sessions are kept per workspace.
 
 ### Auto-named chats
 After the first exchange, Nyx asks the model for a short 3–6 word title and names the chat automatically (shown in the top bar and in History). Falls back to the first message if generation is unavailable. Toggle with `nyx.autoTitle`.
 
-### Chat export & handoff
+### Chat export & handoff (both directions)
 Two ways out of a session: *Nyx: Export Chat as Markdown* saves the full
 transcript (messages, collapsible tool cards, Q&A) as a `.md` file, and
 *Nyx: Copy Chat as Markdown (Handoff)* puts the same Markdown straight on the
 **clipboard** — paste Nyx's local groundwork into Cursor's cloud agent, a PR
 description, or an issue without touching the filesystem.
+
+And one way **in**: copy a conversation (e.g. from Cursor's agent) and run
+*Nyx: Import Handoff from Clipboard* — the text is attached as a 📥 chip and
+rides along as context with your next message, so Nyx continues the work
+locally. Typical split: the cloud agent plans or reviews, Nyx executes
+privately on your own hardware — or the other way around.
 
 ### Privacy report (per-session network log)
 The 🛡 button next to the context meter opens the **network log of the current
@@ -661,6 +709,9 @@ Prefer a coding/tool-tuned model for best results.
 | `nyx.memoryEnabled` | `true` | Remember key outcomes per project |
 | `nyx.memoryInject` | `5` | Recent memories injected into a new session |
 | `nyx.includeActiveFile` | `true` | Auto-include the active file (±30 lines around the cursor) as context |
+| `nyx.repoMap` | `true` | Inject a compact workspace map (~400 tokens) into the agent's system context |
+| `nyx.keepAlive` | `30m` | Keep the model loaded on Ollama between turns (warm KV cache); empty disables |
+| `nyx.accentColor` | `""` | Brand accent color of the Nyx panel (any CSS color; empty = theme focus color) |
 | `nyx.semanticIndexEnabled` | `true` | Local embedding index for `semantic_search` |
 | `nyx.embeddingModel` | `nomic-embed-text` | Embedding model (auto-pulled via Ollama) |
 | `nyx.embeddingOllamaUrl` | `http://localhost:11434` | Override: host for embeddings (default = helper host) |
@@ -687,7 +738,7 @@ A full manual test pass. Assumes Ollama is running with a coding model such as
 ### 0. Build, install, reload
 ```bash
 npm install && npm run build && npm run package
-cursor --install-extension nyx-local-ai-0.27.0.vsix --force
+cursor --install-extension nyx-local-ai-0.28.0.vsix --force
 ```
 Then *Developer: Reload Window* and open the **Nyx** icon.
 
@@ -732,6 +783,7 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 ### 10. Job queue
 - Start a longer task. While it runs, type two more messages and press **Enter** each → they appear in the **N Queued** panel.
 - Reorder (↑), edit (✎), or remove (🗑) items. Let the first finish → the next runs automatically.
+- Press **▶ Send now** on a queued item mid-run → the current job is interrupted and that item starts immediately.
 - Press **Stop** mid-run → the queue pauses. With the input empty, press **Enter** → the next queued job starts.
 
 ### 11. Project memory
@@ -811,6 +863,7 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 
 ### 33. Session tabs
 - Have 2+ chats → a tab strip appears under the title bar. Click a tab to switch instantly, `+` for a new chat, × (on hover) to delete, ⧉ in the title bar to hide/show the strip. While a job runs, switching is blocked with a hint instead of aborting the run.
+- Right-click a tab → **Close chat** deletes that chat; **Close other chats** asks for confirmation, then deletes every other chat and keeps (and switches to) the right-clicked one.
 
 ### 34. Guided first-run
 - Stop Ollama and open a fresh Nyx panel (or click ↻ with no server running) → the empty state shows the setup checklist: Ollama unreachable with a *Check again* button.
@@ -842,6 +895,26 @@ Then *Developer: Reload Window* and open the **Nyx** icon.
 
 ### 42. Chat handoff
 - Run *Nyx: Copy Chat as Markdown (Handoff)* → paste into any editor: the full transcript (messages, tool summaries) lands as Markdown from the clipboard.
+
+### 43. Math rendering
+- In Chat mode, ask *"Erklär mir die Schrödinger-Gleichung mit Formel"* → the equation renders as typeset math (KaTeX), not as raw `\( … \)` / `$$ … $$` text. A sentence like *"costs $5 and $10"* stays plain text.
+
+### 44. Editor tab & focus toggle
+- Run *Nyx: Open Nyx in Editor Tab* (or click ↗ in the Nyx title bar) → Nyx opens as an editor tab showing the same session as the sidebar; messages stream into both.
+- Press `Cmd/Ctrl+Alt+N` in a code file → focus jumps to Nyx; press it again inside Nyx → focus returns to the editor.
+
+### 45. Handoff import
+- Copy any conversation text, run *Nyx: Import Handoff from Clipboard* → a 📥 **Handoff** chip appears above the composer; your next message includes it as context.
+
+### 46. Terminal as context
+- Produce some terminal output (e.g. run `ls` or a failing command), then run *Nyx: Attach Terminal Output to Nyx* → a ⌘ chip with the terminal name appears; ask *"What does my terminal say?"* and the answer references it.
+- In Agent mode, ask *"Read my terminal and explain the last error"* → the agent calls `read_terminal` (auto-allowed on Balanced, asks on Safe).
+
+### 47. Workspace map
+- In Agent mode, ask *"Which file implements the session store?"* in a fresh chat → the agent goes straight to the right path without a `find_files` detour (the map is in its system context). Set `"nyx.repoMap": false` and it searches again.
+
+### 48. Warm keep-alive
+- Send a message via an Ollama model, then run `ollama ps` in a terminal → the model shows an **UNTIL** ~30 minutes in the future (default `nyx.keepAlive: "30m"`). The 🛡 privacy report lists the host with purpose *model keep-alive*.
 
 ### Troubleshooting
 - **No models:** confirm `ollama serve` / LM Studio server is running and the URL matches settings; click ↻. For remote machines, use **Manage models** → **Test** to probe the host.
@@ -889,6 +962,10 @@ storage; project memory lives in the workspace state.
 | --- | --- |
 | *Nyx: New Chat* | Start a fresh conversation |
 | *Nyx: Refresh Local Models* | Rescan Ollama / LM Studio / configured machines |
+| *Nyx: Open Nyx in Editor Tab* | Open Nyx as a full editor tab, next to Cursor's agent |
+| *Nyx: Toggle Nyx Focus* | Jump into Nyx — or back to the editor (`Cmd/Ctrl+Alt+N`) |
+| *Nyx: Import Handoff from Clipboard* | Attach a copied conversation as context for the next message |
+| *Nyx: Attach Terminal Output to Nyx* | Attach the active terminal's visible output |
 | *Nyx: Move Nyx to the Right Side Bar* | Open the view-move picker for the secondary side bar |
 | *Nyx: Show Panel* | Reveal and focus the Nyx chat view |
 | *Nyx: Reset Panel Location* | Reset all view locations and restore Nyx to the left |
@@ -905,7 +982,7 @@ storage; project memory lives in the workspace state.
 | *Nyx: Quick Edit Selection* | Inline-edit the selection with an instruction (`Cmd/Ctrl+Alt+K`) |
 | *Nyx: Run Queued Jobs (Batch)* | Run all queued jobs sequentially with a final report |
 
-Default keybindings: `Cmd/Ctrl+Alt+N` show panel · `Cmd/Ctrl+Alt+Shift+N` new chat · `Cmd/Ctrl+Alt+L` add selection · `Cmd/Ctrl+Alt+K` quick edit.
+Default keybindings: `Cmd/Ctrl+Alt+N` toggle focus (editor ↔ Nyx) · `Cmd/Ctrl+Alt+Shift+N` new chat · `Cmd/Ctrl+Alt+L` add selection · `Cmd/Ctrl+Alt+K` quick edit.
 
 ---
 

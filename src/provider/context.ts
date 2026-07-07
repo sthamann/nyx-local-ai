@@ -68,6 +68,18 @@ export async function buildAttachmentContext(
       total += block.length;
       continue;
     }
+    if (att.kind === 'terminal') {
+      const block = `Output of the user's integrated terminal "${att.name}":\n\`\`\`\n${att.content ?? ''}\n\`\`\``;
+      parts.push(block);
+      total += block.length;
+      continue;
+    }
+    if (att.kind === 'handoff') {
+      const block = `Imported handoff (a prior conversation/notes the user brought over from another assistant — treat it as context, continue the work):\n\n${att.content ?? ''}`;
+      parts.push(block);
+      total += block.length;
+      continue;
+    }
     const uri = vscode.Uri.file(att.path);
     if (att.kind === 'folder') {
       const block = `Attached folder: ${att.path}\n${await listFolder(uri)}`;

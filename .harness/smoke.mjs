@@ -14,7 +14,7 @@ const entry = join(dir, 'entry.js');
 writeFileSync(
   entry,
   `
-export { extractEmbeddedToolCalls, parseJsonLoose, repairJson, parseDsmlToolCalls, stripSpecialTokens } from '${process.cwd()}/src/models/client.ts';
+export { extractEmbeddedToolCalls, parseJsonLoose, repairJson, parseDsmlToolCalls, stripSpecialTokens, isRunawayRepetition } from '${process.cwd()}/src/models/client.ts';
 export { applyStringEdit } from '${process.cwd()}/src/agent/tools.ts';
 export { chunkFile } from '${process.cwd()}/src/context/semanticIndex.ts';
 `,
@@ -120,6 +120,28 @@ check('normal code untouched', m.stripSpecialTokens('a | b || c <div>|</div>') =
 const invokeOnly = `<${BAR}DSML${BAR}invoke name="read_file">\n<${BAR}DSML${BAR}parameter name="path" string="true">a.ts</${BAR}DSML${BAR}parameter>\n</${BAR}DSML${BAR}invoke>`;
 const d4 = m.parseDsmlToolCalls(invokeOnly);
 check('DSML invoke without wrapper parsed', d4 && d4.calls.length === 1 && JSON.parse(d4.calls[0].arguments).path === 'a.ts');
+
+// --- runaway-repetition guard ---
+// The exact failure that motivated this: a small model spewing "cache".
+const cacheLoop = Array.from({ length: 40 }, (_, i) => `Loading ${String.fromCharCode(65 + (i % 26))} cache${' cache'.repeat(12)}... done (0.${200 + i}s)`).join('\n');
+check('word-level loop detected (cache)', m.isRunawayRepetition(cacheLoop));
+
+const lineLoop = 'The build failed. '.repeat(120);
+check('verbatim phrase loop detected', m.isRunawayRepetition(lineLoop));
+
+check('short answer never flagged', !m.isRunawayRepetition('Loading cache cache cache — done. Here is your summary.'));
+
+const proseLong =
+  'The authentication flow begins in the login controller, which validates the submitted credentials against the user store. ' +
+  'On success it issues a signed session token, sets a secure httpOnly cookie, and redirects the browser to the originally requested page. ' +
+  'A background job records an audit entry describing the device, location, and time of the sign-in event for later review. ' +
+  'Failed attempts increment a rate-limit counter; after five misses within a minute the account is temporarily locked and the user is notified by email. ' +
+  'Password resets follow a separate single-use token that expires quickly, and every sensitive mutation refreshes the CSRF token to prevent replay. ' +
+  'Administrators can inspect active sessions from the dashboard and revoke any of them individually or all at once during a suspected breach. ' +
+  'Metrics for latency, error rate, and throughput are exported to the observability stack so on-call engineers can spot regressions early. ' +
+  'Feature flags gate risky changes behind a percentage rollout, and a kill switch lets the team disable a subsystem without redeploying. ' +
+  'Nightly backups are encrypted at rest, replicated across two regions, and periodically restored into a staging copy to prove they actually work.';
+check('normal long prose not flagged', proseLong.length > 1200 && !m.isRunawayRepetition(proseLong));
 
 // --- structure-aware chunking ---
 const code =

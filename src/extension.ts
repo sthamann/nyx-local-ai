@@ -89,6 +89,16 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     { dispose: () => provider.dispose() },
     vscode.commands.registerCommand('nyx.newChat', () => provider.newChat()),
+    vscode.commands.registerCommand('nyx.openInEditor', () => provider.openInEditor()),
+    vscode.commands.registerCommand('nyx.toggleFocus', () => {
+      void provider.toggleFocus();
+    }),
+    vscode.commands.registerCommand('nyx.importHandoff', () => {
+      void provider.importHandoff();
+    }),
+    vscode.commands.registerCommand('nyx.attachTerminal', () => {
+      void provider.attachTerminal();
+    }),
     vscode.commands.registerCommand('nyx.moveToRight', () => {
       void moveNyxToRight();
     }),

@@ -5,6 +5,8 @@ node_modules/
 dist/
 media/main.js
 media/main.js.map
+media/katex.min.css
+media/fonts/
 *.map
 
 # Packaged extension

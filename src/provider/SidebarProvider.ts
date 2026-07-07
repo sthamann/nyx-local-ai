@@ -31,6 +31,9 @@ import { mediaKind, pullModel } from '../context/media';
 import type { MediaOptions } from '../context/media';
 import { NetworkLog } from './networkLog';
 import { computeBenchAdvice, routeByBenchmarks } from '../eval/routing';
+import { captureActiveTerminal } from '../context/terminal';
+import { buildRepoMap } from '../context/repoMap';
+import { warmKeepAlive } from '../models/warm';
 import type {
   AttachmentMeta,
   ChatMode,
@@ -55,8 +58,14 @@ interface ApprovalDecision {
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'nyx.chatView';
+  /** View type of the optional editor-tab host ("Open Nyx in Editor Tab"). */
+  public static readonly panelViewType = 'nyx.chatPanel';
 
   private view?: vscode.WebviewView;
+  /** Editor-tab host; the same UI, broadcast alongside the sidebar view. */
+  private panel?: vscode.WebviewPanel;
+  /** Whether any Nyx webview currently holds keyboard focus (for the focus toggle). */
+  private webviewFocused = false;
   private readonly session = new AgentSession();
   private readonly checkpoints = new CheckpointStore();
   private readonly processes = new ProcessManager();
@@ -140,6 +149,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor && editor.document.uri.scheme === 'file') {
           this.lastEditor = editor;
+        }
+      }),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('nyx.accentColor')) {
+          this.postConfig();
         }
       }),
       // Serves checkpoint originals as virtual documents for the native diff view.
@@ -279,8 +293,58 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** Opens (or reveals) Nyx as a full editor tab — next to Cursor's own agent pane. */
+  openInEditor(): void {
+    if (this.panel) {
+      this.panel.reveal();
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      SidebarProvider.panelViewType,
+      'Nyx',
+      vscode.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+      },
+    );
+    panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'icon.svg');
+    panel.webview.html = this.getHtml(panel.webview);
+    panel.webview.onDidReceiveMessage((message: WebviewToHost) => {
+      void this.handle(message);
+    });
+    panel.onDidDispose(() => {
+      this.panel = undefined;
+    });
+    this.panel = panel;
+  }
+
+  /**
+   * One-key world switch: jumps into Nyx when it isn't focused, back to the
+   * editor when it is. Focus state is reported by the webviews themselves.
+   */
+  async toggleFocus(): Promise<void> {
+    if (this.webviewFocused) {
+      this.webviewFocused = false;
+      if (this.panel?.active) {
+        // Nyx *is* the active editor — move to the next group (or stay if none).
+        await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+      } else {
+        await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+      }
+      return;
+    }
+    if (this.panel) {
+      this.panel.reveal(undefined, false);
+      return;
+    }
+    await vscode.commands.executeCommand(`${SidebarProvider.viewId}.focus`);
+  }
+
   private post(message: HostToWebview): void {
     void this.view?.webview.postMessage(message);
+    void this.panel?.webview.postMessage(message);
   }
 
   /** Shows a badge on the view icon when a run finishes while Nyx is hidden. */
@@ -379,6 +443,55 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     await vscode.commands.executeCommand('nyx.chatView.focus');
   }
 
+  /**
+   * Imports a conversation/context from the clipboard (e.g. a Cursor chat)
+   * as an attachment for the next message — the reverse of the handoff copy.
+   */
+  async importHandoff(): Promise<void> {
+    const text = (await vscode.env.clipboard.readText()).trim();
+    if (!text) {
+      void vscode.window.showInformationMessage('Nyx: the clipboard is empty — copy a conversation or notes first.');
+      return;
+    }
+    const capped = text.length > 40000 ? `${text.slice(0, 40000)}\n… [truncated]` : text;
+    const key = `handoff#${Date.now()}`;
+    this.attachments = this.attachments.filter((a) => a.kind !== 'handoff');
+    this.attachments.push({
+      path: key,
+      name: 'Handoff',
+      kind: 'handoff',
+      content: capped,
+      label: `Handoff (${Math.round(text.length / 1000)}k chars)`,
+    });
+    this.postAttachments();
+    this.post({ type: 'status', text: 'Handoff imported from the clipboard — it rides along with your next message.' });
+    await vscode.commands.executeCommand('nyx.chatView.focus');
+  }
+
+  /** Attaches the active integrated terminal's visible output to the next message. */
+  async attachTerminal(): Promise<void> {
+    const capture = await captureActiveTerminal();
+    if (!capture) {
+      void vscode.window.showInformationMessage('Nyx: no integrated terminal is open.');
+      return;
+    }
+    if (!capture.text) {
+      void vscode.window.showInformationMessage(`Nyx: terminal "${capture.name}" has no visible output.`);
+      return;
+    }
+    const key = `terminal#${capture.name}`;
+    this.attachments = this.attachments.filter((a) => a.path !== key);
+    this.attachments.push({
+      path: key,
+      name: capture.name,
+      kind: 'terminal',
+      content: capture.text,
+      label: `Terminal: ${capture.name}`,
+    });
+    this.postAttachments();
+    await vscode.commands.executeCommand('nyx.chatView.focus');
+  }
+
   private async handle(message: WebviewToHost): Promise<void> {
     switch (message.type) {
       case 'ready':
@@ -389,6 +502,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         await this.postMachines();
         this.postMemories();
         this.postQueue();
+        // A second host (editor tab) can connect mid-session — sync it up.
+        if (this.currentDisplay.length > 0) {
+          this.post({ type: 'sessionLoaded', items: this.currentDisplay, mode: this.currentMode });
+        }
+        if (this.busy) {
+          this.post({ type: 'busy', busy: true });
+        }
+        this.postAttachments();
+        return;
+      case 'viewFocus':
+        this.webviewFocused = message.focused;
         return;
       case 'refreshModels':
         await this.refreshModels();
@@ -453,6 +577,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'deleteSession':
         await this.deleteSession(message.id);
         return;
+      case 'deleteOtherSessions':
+        await this.deleteOtherSessions(message.keepId);
+        return;
       case 'cancel':
         this.stopRequested = true;
         this.grind = undefined;
@@ -497,6 +624,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       case 'queueSet':
         this.setQueue(message.items);
+        return;
+      case 'queueRunNow':
+        await this.runQueuedNow(message.index);
         return;
       case 'restoreCheckpoint':
         await this.restoreCheckpoint(message.checkpointId, { resend: false });
@@ -610,7 +740,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private postConfig(): void {
-    this.post({ type: 'config', autonomy: this.autonomy() });
+    const accent = (vscode.workspace.getConfiguration('nyx').get<string>('accentColor') ?? '').trim();
+    this.post({ type: 'config', autonomy: this.autonomy(), accentColor: accent || undefined });
   }
 
   private getQueue(): string[] {
@@ -648,6 +779,33 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     }
     await this.onSend(next, this.currentModelKey ?? this.selectedKey ?? '', this.currentMode ?? 'agent');
+  }
+
+  /**
+   * Runs one queued job right now. If a run is in progress it is aborted first
+   * (so a stuck/looping turn can be jumped) — the queued message then starts on
+   * its own. Batch/grind loops are cleared so they don't resume behind it.
+   */
+  private async runQueuedNow(index: number): Promise<void> {
+    const queue = this.getQueue();
+    if (index < 0 || index >= queue.length) {
+      return;
+    }
+    const text = queue[index];
+    const rest = queue.slice();
+    rest.splice(index, 1);
+    this.setQueue(rest);
+
+    if (this.busy) {
+      this.stopRequested = true;
+      this.grind = undefined;
+      this.batch = undefined;
+      this.cancelRun();
+      // Let the aborted run unwind (its finally persists state) before restarting.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    this.stopRequested = false;
+    await this.onSend(text, this.currentModelKey ?? this.selectedKey ?? '', this.currentMode ?? 'agent');
   }
 
   // ---- Batch runs over the queue (overnight mode with a morning report) ----
@@ -855,7 +1013,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const memoryEnabled = cfg.get<boolean>('memoryEnabled') ?? true;
     const memoryDigest = memoryEnabled ? this.memory.digest(cfg.get<number>('memoryInject') ?? 5, this.currentSessionId) : '';
     const userAppend = (cfg.get<string>('systemPromptAppend') ?? '').trim();
-    const systemAddon = [buildRulesSection(rules), buildSkillsSection(this.skillsCache), memoryDigest, userAppend]
+    // Compact workspace map so (small) models stop guessing where files live; agent mode only.
+    const repoMap = mode === 'agent' && (cfg.get<boolean>('repoMap') ?? true) ? await buildRepoMap(this.workspaceRoot()) : '';
+    const systemAddon = [repoMap, buildRulesSection(rules), buildSkillsSection(this.skillsCache), memoryDigest, userAppend]
       .filter(Boolean)
       .join('\n\n');
     const overrides = cfg.get<Record<string, unknown>>('toolPermissions') ?? {};
@@ -1018,6 +1178,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'context', usedTokens: this.session.estimateTokens(), budgetTokens: budget });
       this.postSessions();
       this.notifyDone();
+      // Re-arm Ollama's keep-alive so the model stays loaded between turns.
+      const keepAlive = (cfg.get<string>('keepAlive') ?? '30m').trim();
+      if (keepAlive && model.provider === 'ollama') {
+        this.networkLog.record(model.endpoint, 'model keep-alive');
+        void warmKeepAlive(model, keepAlive);
+      }
       if (!aborted) {
         void this.maybeGenerateTitle(model);
         if (this.grind) {
@@ -1947,10 +2113,37 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /** "Close other chats" from the tab context menu. Closing a tab deletes the chat, so confirm first. */
+  private async deleteOtherSessions(keepId: string): Promise<void> {
+    const others = this.sessions.list().filter((m) => m.id !== keepId);
+    if (others.length === 0) {
+      return;
+    }
+    const confirmLabel = 'Delete';
+    const choice = await vscode.window.showWarningMessage(
+      `Close ${others.length} other chat${others.length === 1 ? '' : 's'}? They are deleted from the history permanently.`,
+      { modal: true },
+      confirmLabel,
+    );
+    if (choice !== confirmLabel) {
+      return;
+    }
+    for (const meta of others) {
+      await this.sessions.remove(meta.id);
+    }
+    if (this.currentSessionId && this.currentSessionId !== keepId) {
+      // The active chat was among the deleted ones — switch to the kept tab.
+      await this.loadSession(keepId);
+    } else {
+      this.postSessions();
+    }
+  }
+
   private getHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.css'));
+    const katexCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'katex.min.css'));
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} https: data:`,
@@ -1965,6 +2158,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="${katexCssUri}" rel="stylesheet" />
   <link href="${styleUri}" rel="stylesheet" />
   <title>Nyx</title>
 </head>

@@ -326,6 +326,11 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       return;
     case 'config':
       autonomySelect.value = message.autonomy;
+      if (message.accentColor) {
+        document.documentElement.style.setProperty('--nyx-accent', message.accentColor);
+      } else {
+        document.documentElement.style.removeProperty('--nyx-accent');
+      }
       return;
     case 'review':
       renderReview(message.files);
@@ -351,6 +356,10 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
     }
   }
 });
+
+// Focus tracking powers the host's "Toggle Nyx Focus" command (editor ↔ Nyx).
+window.addEventListener('focus', () => post({ type: 'viewFocus', focused: true }));
+window.addEventListener('blur', () => post({ type: 'viewFocus', focused: false }));
 
 setMode(S.mode);
 renderEmptyState();

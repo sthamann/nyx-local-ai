@@ -2,7 +2,7 @@
   "name": "nyx-local-ai",
   "displayName": "Nyx — Local AI",
   "description": "A local-first AI coding agent sidebar. Auto-detects Ollama & LM Studio models. No account, no cloud.",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -61,6 +61,27 @@
         "title": "Move Nyx to the Right Side Bar",
         "category": "Nyx",
         "icon": "$(layout-sidebar-right)"
+      },
+      {
+        "command": "nyx.openInEditor",
+        "title": "Open Nyx in Editor Tab",
+        "category": "Nyx",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "nyx.toggleFocus",
+        "title": "Toggle Nyx Focus",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.importHandoff",
+        "title": "Import Handoff from Clipboard",
+        "category": "Nyx"
+      },
+      {
+        "command": "nyx.attachTerminal",
+        "title": "Attach Terminal Output to Nyx",
+        "category": "Nyx"
       },
       {
         "command": "nyx.attachToNyx",
@@ -139,7 +160,7 @@
     ],
     "keybindings": [
       {
-        "command": "nyx.show",
+        "command": "nyx.toggleFocus",
         "key": "ctrl+alt+n",
         "mac": "cmd+alt+n"
       },
@@ -174,9 +195,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "nyx.moveToRight",
+          "command": "nyx.openInEditor",
           "when": "view == nyx.chatView",
           "group": "navigation@3"
+        },
+        {
+          "command": "nyx.moveToRight",
+          "when": "view == nyx.chatView",
+          "group": "navigation@4"
         }
       ],
       "explorer/context": [
@@ -438,6 +464,21 @@
           "default": true,
           "description": "Automatically include the active editor file (path + ±30 lines around the cursor) as lightweight context with each message."
         },
+        "nyx.repoMap": {
+          "type": "boolean",
+          "default": true,
+          "description": "Inject a compact workspace map (directories and their files, ~400 tokens) into the agent's system context so models stop guessing where files live."
+        },
+        "nyx.keepAlive": {
+          "type": "string",
+          "default": "30m",
+          "description": "Keep the model loaded on Ollama after each turn (warm KV cache, no reload between turns). Ollama duration format, e.g. '30m', '2h', '-1' (forever); empty disables."
+        },
+        "nyx.accentColor": {
+          "type": "string",
+          "default": "",
+          "description": "Brand accent color of the Nyx panel (any CSS color, e.g. '#b180d7'). Empty uses the theme's focus color. Helps telling Nyx apart from Cursor's own agent panel."
+        },
         "nyx.systemPromptAppend": {
           "type": "string",
           "default": "",
@@ -508,7 +549,60 @@
           "description": "How many recent memory entries to inject into a new session's system prompt. The agent can recall more via the recall_memory tool."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "nyx.gettingStarted",
+        "title": "Nyx — Local AI: Getting Started",
+        "description": "Where Nyx lives next to Cursor's own agent, how to switch between them, and how to hand work off in both directions.",
+        "steps": [
+          {
+            "id": "nyx.step.worlds",
+            "title": "Nyx vs. Cursor's agent panel",
+            "description": "Nyx is a separate, fully local agent — it is not Cursor's cloud agent. The header with its own accent line and the ✦ NYX wordmark marks the Nyx world.\nGive Nyx its own space as a full editor tab, side by side with Cursor's agent.\n[Open Nyx in Editor Tab](command:nyx.openInEditor)",
+            "media": {
+              "markdown": "media/walkthrough/worlds.md"
+            },
+            "completionEvents": [
+              "onCommand:nyx.openInEditor"
+            ]
+          },
+          {
+            "id": "nyx.step.models",
+            "title": "Find your local models",
+            "description": "Nyx auto-detects Ollama and LM Studio on start. Add remote machines (a DGX box, a Mac Studio) via the ⚙ Manage models view.\n[Refresh Local Models](command:nyx.refreshModels)",
+            "media": {
+              "markdown": "media/walkthrough/models.md"
+            },
+            "completionEvents": [
+              "onCommand:nyx.refreshModels"
+            ]
+          },
+          {
+            "id": "nyx.step.toggle",
+            "title": "Switch worlds with one key",
+            "description": "Press `Ctrl+Alt+N` (`Cmd+Alt+N` on macOS) to jump into Nyx — and press it again inside Nyx to jump back to your editor.\n[Try it now](command:nyx.toggleFocus)",
+            "media": {
+              "markdown": "media/walkthrough/toggle.md"
+            },
+            "completionEvents": [
+              "onCommand:nyx.toggleFocus"
+            ]
+          },
+          {
+            "id": "nyx.step.handoff",
+            "title": "Hand work off in both directions",
+            "description": "Send Nyx's local groundwork to Cursor with *Copy Chat as Markdown (Handoff)* — or copy a Cursor conversation and continue it locally.\n[Import Handoff from Clipboard](command:nyx.importHandoff)",
+            "media": {
+              "markdown": "media/walkthrough/handoff.md"
+            },
+            "completionEvents": [
+              "onCommand:nyx.importHandoff"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -523,6 +617,7 @@
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.24.0",
     "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
     "marked": "^15.0.0",
     "typescript": "^5.7.0",
     "unpdf": "^1.6.2"

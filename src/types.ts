@@ -154,12 +154,12 @@ export interface PlanItem {
   status: 'pending' | 'active' | 'done';
 }
 
-/** A file, folder, or editor selection attached to enrich the next message. */
+/** A file, folder, editor selection, terminal capture, or imported handoff attached to enrich the next message. */
 export interface AttachmentMeta {
   path: string;
   name: string;
-  kind: 'file' | 'folder' | 'selection';
-  /** Inline content (selections only). */
+  kind: 'file' | 'folder' | 'selection' | 'terminal' | 'handoff';
+  /** Inline content (selection / terminal / handoff kinds). */
   content?: string;
   /** Human-readable label, e.g. "main.ts:12-40". */
   label?: string;
@@ -175,6 +175,8 @@ export type WebviewToHost =
   | { type: 'listSessions' }
   | { type: 'loadSession'; id: string }
   | { type: 'deleteSession'; id: string }
+  /** Tab context menu "Close other chats" — deletes every session except keepId (host confirms). */
+  | { type: 'deleteOtherSessions'; keepId: string }
   | { type: 'getMachines' }
   | { type: 'testMachine'; machine: Machine }
   | { type: 'saveMachine'; machine: Machine }
@@ -193,6 +195,8 @@ export type WebviewToHost =
   // Host-owned job queue.
   | { type: 'queueAdd'; text: string }
   | { type: 'queueSet'; items: string[] }
+  /** Runs a queued job immediately, interrupting the current run if one is active. */
+  | { type: 'queueRunNow'; index: number }
   // Checkpoints / message editing.
   | { type: 'restoreCheckpoint'; checkpointId: string }
   | { type: 'retryLast' }
@@ -226,7 +230,9 @@ export type WebviewToHost =
   /** Requests the per-session network log (privacy report). */
   | { type: 'getNetworkLog' }
   /** Applies the post-benchmark setup recommendation. */
-  | { type: 'applyBenchSetup'; dailyKey?: string; utilityKey?: string; autocompleteModel?: string };
+  | { type: 'applyBenchSetup'; dailyKey?: string; utilityKey?: string; autocompleteModel?: string }
+  /** The webview gained/lost keyboard focus (powers the focus-toggle command). */
+  | { type: 'viewFocus'; focused: boolean };
 
 /** Messages sent from the extension host to the webview UI. */
 export type HostToWebview =
@@ -264,8 +270,8 @@ export type HostToWebview =
   | { type: 'mentionResults'; token: string; files: string[] }
   /** The agent's current task plan (empty array hides the card). */
   | { type: 'plan'; items: PlanItem[] }
-  /** Host-side config the UI mirrors (autonomy preset). */
-  | { type: 'config'; autonomy: string }
+  /** Host-side config the UI mirrors (autonomy preset, optional brand accent color). */
+  | { type: 'config'; autonomy: string; accentColor?: string }
   /** All net file changes of this session vs. its checkpoints. */
   | { type: 'review'; files: ReviewFile[] }
   /** Stored benchmark scores per model key + optional just-finished/failed run. */

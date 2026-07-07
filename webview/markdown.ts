@@ -1,7 +1,71 @@
-import { marked } from 'marked';
+import { marked, type TokenizerAndRendererExtension } from 'marked';
 import hljs from 'highlight.js/lib/common';
+import katex from 'katex';
+
+/** Renders TeX to HTML; KaTeX escapes everything, so the output is innerHTML-safe. */
+function renderTex(tex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(tex, { displayMode, throwOnError: false });
+  } catch {
+    const escaped = tex.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return displayMode ? `<pre><code>${escaped}</code></pre>` : `<code>${escaped}</code>`;
+  }
+}
+
+// Math support (#a — models emit LaTeX): $$…$$ / \[…\] as display blocks,
+// \(…\) / $…$ inline. Tokenized before marked's own rules so underscores,
+// asterisks and backslashes inside formulas survive markdown parsing.
+const BLOCK_MATH_PATTERNS = [/^\$\$([\s\S]+?)\$\$(?:\s*\n+|\s*$)/, /^\\\[([\s\S]+?)\\\](?:\s*\n+|\s*$)/];
+
+const blockMath: TokenizerAndRendererExtension = {
+  name: 'blockMath',
+  level: 'block',
+  tokenizer(src: string) {
+    for (const pattern of BLOCK_MATH_PATTERNS) {
+      const match = pattern.exec(src);
+      if (match) {
+        return { type: 'blockMath', raw: match[0], text: match[1].trim() };
+      }
+    }
+    return undefined;
+  },
+  renderer(token) {
+    return `<div class="nyx-math-block">${renderTex(String(token.text), true)}</div>\n`;
+  },
+};
+
+// Inline order matters: $$…$$ before $…$. The $…$ rule requires non-space
+// content boundaries and no trailing digit, so "$5 and $10" stays plain text.
+const INLINE_MATH_PATTERNS: Array<{ pattern: RegExp; display: boolean }> = [
+  { pattern: /^\$\$([^\n$]+?)\$\$/, display: true },
+  { pattern: /^\\\[([\s\S]+?)\\\]/, display: true },
+  { pattern: /^\\\(([\s\S]+?)\\\)/, display: false },
+  { pattern: /^\$(?=\S)((?:\\[^\n]|[^\\\n$])+?)(?<=\S)\$(?!\d)/, display: false },
+];
+
+const inlineMath: TokenizerAndRendererExtension = {
+  name: 'inlineMath',
+  level: 'inline',
+  start(src: string) {
+    const index = src.search(/\$|\\\(|\\\[/);
+    return index === -1 ? undefined : index;
+  },
+  tokenizer(src: string) {
+    for (const { pattern, display } of INLINE_MATH_PATTERNS) {
+      const match = pattern.exec(src);
+      if (match) {
+        return { type: 'inlineMath', raw: match[0], text: match[1].trim(), display };
+      }
+    }
+    return undefined;
+  },
+  renderer(token) {
+    return renderTex(String(token.text), token.display === true);
+  },
+};
 
 marked.setOptions({ gfm: true, breaks: true });
+marked.use({ extensions: [blockMath, inlineMath] });
 
 /** Renders markdown into an element (without syntax highlighting — cheap, for streaming). */
 export function renderMarkdown(el: HTMLElement, text: string): void {

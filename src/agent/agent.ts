@@ -442,6 +442,7 @@ export class AgentSession {
               temperature: m.temperature,
               maxTokens: params.maxOutputTokens,
               ollamaNumCtx: m.provider === 'ollama' ? m.numCtx : undefined,
+              detectRepetition: true,
               signal: params.signal,
             },
             { onDelta: cb.onAssistantDelta, onReasoning: cb.onReasoning },
@@ -530,6 +531,9 @@ export class AgentSession {
       );
       cb.onAssistantEnd(result.content);
       cb.onStats?.(result.stats);
+      if (result.stoppedForRepetition) {
+        cb.onStatus('Stopped the model — it was repeating itself in a loop. Kept the partial reply; try a smaller step or a different model.');
+      }
       if (result.stats.promptTokens !== undefined) {
         this.lastPromptTokens = result.stats.promptTokens + result.stats.completionTokens;
         this.lastPromptMessageCount = this.messages.length + 1; // incl. the assistant reply below

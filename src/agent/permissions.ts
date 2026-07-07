@@ -16,6 +16,7 @@ const BALANCED: Record<string, PermissionPolicy> = {
   get_diagnostics: 'allow',
   git_diff: 'allow',
   git_log: 'allow',
+  read_terminal: 'allow',
   fetch_url: 'allow',
   web_search: 'allow',
   recall_memory: 'allow',
@@ -50,6 +51,8 @@ const SAFE_ADJUSTMENTS: Record<string, PermissionPolicy> = {
   browser_snapshot: 'ask',
   browser_screenshot: 'ask',
   save_memory: 'ask',
+  // Terminal scrollback can contain secrets (tokens, env dumps).
+  read_terminal: 'ask',
 };
 
 /**

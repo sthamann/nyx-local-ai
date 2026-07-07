@@ -15,6 +15,7 @@ import { parseJsonLoose } from '../models/client';
 import type { ProcessManager } from './processes';
 import type { SemanticIndex, SemanticOptions } from '../context/semanticIndex';
 import type { BrowserManager } from './browser';
+import { captureActiveTerminal } from '../context/terminal';
 
 export { toolSchemas, schemasForModel } from './toolSchemas';
 export type { ToolProfile } from './toolSchemas';
@@ -216,6 +217,8 @@ export async function executeTool(name: string, rawArgs: string, ctx: ToolContex
       return runScript(ctx, String(args.language ?? ''), String(args.code ?? ''));
     case 'run_command':
       return runCommand(ctx, String(args.command ?? ''), args.background === true);
+    case 'read_terminal':
+      return readTerminal(numberOrUndefined(args.max_chars));
     case 'git_diff':
       return gitDiff(ctx, args.staged === true, args.path ? String(args.path) : undefined);
     case 'git_log':
@@ -1175,6 +1178,18 @@ async function runGit(ctx: ToolContext, command: string): Promise<ToolOutcome> {
     return { ok: false, content: truncate(`git failed (exit ${result.exitCode}):\n${result.output.trim().slice(0, 2000)}`) };
   }
   return { ok: true, content: truncate(result.output.trim() || '(no output)') };
+}
+
+/** Reads the active integrated terminal's scrollback (select-all/copy trick — no stable buffer API exists). */
+async function readTerminal(maxChars?: number): Promise<ToolOutcome> {
+  const capture = await captureActiveTerminal(maxChars && maxChars > 0 ? Math.min(maxChars, MAX_OUTPUT_CHARS) : 12000);
+  if (!capture) {
+    return { ok: false, content: 'No integrated terminal is open.' };
+  }
+  if (!capture.text) {
+    return { ok: true, content: `Terminal "${capture.name}" is empty (no visible output).` };
+  }
+  return { ok: true, content: `Output of terminal "${capture.name}":\n${capture.text}` };
 }
 
 /** Read-only working-tree diff ("what did I just change?") without run_command approval friction. */

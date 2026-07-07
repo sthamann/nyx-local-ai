@@ -183,6 +183,75 @@ export function updateChatTitle(): void {
 
 const MAX_TABS = 12;
 
+// ---- Tab context menu (right-click on a session tab) ----
+
+let tabMenuCleanup: (() => void) | undefined;
+
+function closeTabMenu(): void {
+  tabMenuCleanup?.();
+  tabMenuCleanup = undefined;
+}
+
+function showTabMenu(event: MouseEvent, session: SessionMeta): void {
+  event.preventDefault();
+  closeTabMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'nyx-tab-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', `Actions for "${session.title}"`);
+
+  const addItem = (label: string, onClick: () => void): HTMLButtonElement => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'nyx-tab-menu-item';
+    item.setAttribute('role', 'menuitem');
+    item.textContent = label;
+    item.addEventListener('click', () => {
+      closeTabMenu();
+      onClick();
+    });
+    menu.appendChild(item);
+    return item;
+  };
+
+  addItem('Close chat', () => post({ type: 'deleteSession', id: session.id }));
+  const closeOthers = addItem('Close other chats', () => {
+    // Keeping a non-active tab means switching to it — blocked while a job runs.
+    if (session.id !== S.currentSessionId && guardBusySwitch()) {
+      return;
+    }
+    post({ type: 'deleteOtherSessions', keepId: session.id });
+  });
+  closeOthers.disabled = S.sessions.length < 2;
+
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(0, Math.min(event.clientX, window.innerWidth - rect.width - 4))}px`;
+  menu.style.top = `${Math.max(0, Math.min(event.clientY, window.innerHeight - rect.height - 4))}px`;
+
+  const onMouseDown = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node)) {
+      closeTabMenu();
+    }
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeTabMenu();
+    }
+  };
+  const onBlur = () => closeTabMenu();
+  window.addEventListener('mousedown', onMouseDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('blur', onBlur);
+  tabMenuCleanup = () => {
+    menu.remove();
+    window.removeEventListener('mousedown', onMouseDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('blur', onBlur);
+  };
+}
+
 /** Renders the session tab strip (recent chats as switchable pills). */
 export function renderSessionTabs(): void {
   tabsToggleBtn.setAttribute('aria-pressed', String(S.showSessionTabs));
@@ -249,6 +318,7 @@ export function renderSessionTabs(): void {
       post({ type: 'loadSession', id: s.id });
       showView('chat');
     });
+    tab.addEventListener('contextmenu', (e) => showTabMenu(e, s));
     sessionTabsEl.appendChild(tab);
   }
 

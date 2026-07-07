@@ -293,6 +293,20 @@ export const toolSchemas: ToolSchema[] = [
   {
     type: 'function',
     function: {
+      name: 'read_terminal',
+      description:
+        "Read the visible output (scrollback) of the user's active integrated terminal — use when the user refers to an error or output 'in the terminal'. Read-only.",
+      parameters: {
+        type: 'object',
+        properties: {
+          max_chars: { type: 'number', description: 'Tail size to return in characters (default 12000).' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'git_diff',
       description:
         'Show the uncommitted git changes of the workspace (working tree vs. HEAD) plus a short status — use this to see what was just changed. Read-only.',

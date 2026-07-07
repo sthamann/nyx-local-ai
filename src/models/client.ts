@@ -28,6 +28,12 @@ export interface ChatParams {
   maxTokens?: number;
   /** Ollama-only context length, sent via `options.num_ctx`. */
   ollamaNumCtx?: number;
+  /**
+   * Aborts the stream when the model gets stuck in a degenerate repetition loop
+   * (e.g. "cache cache cache …"). Small local models fall into these; the
+   * `max_tokens` cap alone lets them spew for minutes before stopping.
+   */
+  detectRepetition?: boolean;
 }
 
 export interface ParsedToolCall {
@@ -53,6 +59,8 @@ export interface AssistantResult {
   content: string;
   toolCalls: ParsedToolCall[];
   stats: StreamStats;
+  /** True when the stream was cut short because the model was looping (#repetition guard). */
+  stoppedForRepetition: boolean;
 }
 
 function randomId(): string {
@@ -461,6 +469,70 @@ function startsWithToolCall(lead: string, toolNames?: string[]): boolean {
   return match ? toolNames.includes(match[1]) : false;
 }
 
+// ---- Runaway-repetition guard ----
+//
+// Small local models frequently collapse into degenerate loops — the same word
+// or phrase over and over ("cache cache cache …", or a line repeated verbatim).
+// The `max_tokens` cap eventually stops them, but at ~50 tok/s that is minutes
+// of garbage. We watch the accumulated content and cut the stream the moment
+// the tail is overwhelmingly repetitive. Thresholds are deliberately high so
+// normal (even list-heavy) answers never trip it; short answers are exempt.
+
+/** Below this length we never judge — short answers can be legitimately terse. */
+const REPEAT_MIN_LEN = 1200;
+/** Only the trailing window is inspected, so early prose can't dilute the signal. */
+const REPEAT_TAIL = 1600;
+
+/**
+ * Detects a runaway repetition loop in generated text. Two independent signals:
+ *  A) a short unit repeated back-to-back at the tail's end (verbatim loops), and
+ *  B) a single whitespace token dominating the tail (word-level loops like
+ *     "cache cache cache" whose surrounding words still vary).
+ */
+export function isRunawayRepetition(text: string): boolean {
+  if (text.length < REPEAT_MIN_LEN) {
+    return false;
+  }
+  const tail = text.slice(-REPEAT_TAIL);
+  const n = tail.length;
+
+  // Signal A: unit of length 1..200 repeated consecutively at the very end.
+  for (let u = 1; u <= Math.min(200, n >> 2); u++) {
+    const unit = tail.slice(n - u);
+    if (unit.trim().length === 0) {
+      continue; // ignore runs of pure whitespace
+    }
+    let count = 1;
+    let pos = n - u;
+    while (pos - u >= 0 && tail.slice(pos - u, pos) === unit) {
+      count++;
+      pos -= u;
+    }
+    if (count >= 12 && count * u >= 300) {
+      return true;
+    }
+  }
+
+  // Signal B: one token accounts for at least half of a long tail.
+  const tokens = tail.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 100) {
+    const freq = new Map<string, number>();
+    let max = 0;
+    for (const t of tokens) {
+      const c = (freq.get(t) ?? 0) + 1;
+      freq.set(t, c);
+      if (c > max) {
+        max = c;
+      }
+    }
+    if (max / tokens.length >= 0.5) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Calls an OpenAI-compatible /chat/completions endpoint with streaming enabled,
  * incrementally reporting assistant text while accumulating any tool calls.
@@ -516,6 +588,22 @@ export async function streamChat(params: ChatParams, handlers: StreamHandlers): 
   let firstTokenAt = 0;
   let usageCompletion: number | undefined;
   let usagePrompt: number | undefined;
+
+  // Runaway-repetition guard: re-scan the tail periodically (not every delta).
+  let stoppedForRepetition = false;
+  let lastRepeatCheckLen = 0;
+  const maybeCheckRepetition = (): void => {
+    if (!params.detectRepetition || stoppedForRepetition || content.length < REPEAT_MIN_LEN) {
+      return;
+    }
+    if (content.length - lastRepeatCheckLen < 300) {
+      return;
+    }
+    lastRepeatCheckLen = content.length;
+    if (isRunawayRepetition(content)) {
+      stoppedForRepetition = true;
+    }
+  };
   const markFirst = (): void => {
     if (firstTokenAt === 0) {
       firstTokenAt = Date.now();
@@ -588,6 +676,7 @@ export async function streamChat(params: ChatParams, handlers: StreamHandlers): 
 
   const handleContentDelta = (piece: string): void => {
     content += piece;
+    maybeCheckRepetition();
     if (!extract) {
       handlers.onDelta(piece);
       return;
@@ -717,6 +806,12 @@ export async function streamChat(params: ChatParams, handlers: StreamHandlers): 
         }
       }
     }
+
+    // The model is looping — stop reading and keep the partial content.
+    if (stoppedForRepetition) {
+      await reader.cancel().catch(() => undefined);
+      break;
+    }
   }
 
   // Flush any leftover partial-tag buffer once the stream ends.
@@ -776,5 +871,5 @@ export async function streamChat(params: ChatParams, handlers: StreamHandlers): 
     estimated: usageCompletion === undefined,
   };
 
-  return { content: outContent, toolCalls, stats };
+  return { content: outContent, toolCalls, stats, stoppedForRepetition };
 }
