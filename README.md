@@ -1059,3 +1059,7 @@ promo/                    # HyperFrames source of the 30-second promo video
 ## License
 
 MIT
+
+## Author
+
+Built by [Stefan Hamann](https://stefan-hamann.de/), co-founder of Shopware and author of the handbook [Agentic Commerce](https://www.agentic-commerce.sh/). More about this project: [Nyx on agentic-commerce.sh](https://www.agentic-commerce.sh/en/lab/nyx/).
